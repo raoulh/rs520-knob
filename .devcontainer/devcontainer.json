@@ -1,0 +1,62 @@
+{
+	"name": "ESP-IDF QEMU",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"options": []
+	},
+
+	"mounts": [
+		"source=extensionCache,target=/root/.vscode-server/extensions,type=volume",
+		"source=${localEnv:HOME}/.agents,target=/root/.agents,type=bind,consistency=cached",
+		"source=${localEnv:HOME}/.agents,target=/home/esp/.agents,type=bind,consistency=cached"
+	],
+
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"idf.espIdfPath": "/opt/esp/idf",
+				"idf.customExtraPaths": "",
+				"idf.pythonBinPath": "/opt/esp/python_env/idf6.0_py3.12_env/bin/python",
+				"idf.toolsPath": "/opt/esp",
+				"idf.gitPath": "/usr/bin/git"
+			},
+			"extensions": [
+				"ms-vscode.cpptools-extension-pack",
+				"ms-vscode.makefile-tools",
+				"lizebang.bash-extension-pack",
+				"ms-vscode.cmake-tools",
+				"espressif.esp-idf-extension",
+				"Vue.volar",
+				"golang.go"
+			]
+		},
+		"codespaces": {
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"idf.espIdfPath": "/opt/esp/idf",
+				"idf.customExtraPaths": "",
+				"idf.pythonBinPath": "/opt/esp/python_env/idf6.0_py3.12_env/bin/python",
+				"idf.toolsPath": "/opt/esp",
+				"idf.gitPath": "/usr/bin/git"
+			},
+			"extensions": [
+				"ms-vscode.cpptools-extension-pack",
+				"ms-vscode.makefile-tools",
+				"lizebang.bash-extension-pack",
+				"ms-vscode.cmake-tools",
+				"espressif.esp-idf-extension"
+			]
+		}
+	},
+	"runArgs": [
+		"--privileged",
+		"--network=host",
+		"--group-add=18",
+		"--device=/dev/ttyACM0:/dev/ttyACM0",
+		"--device=/dev/ttyUSB0:/dev/ttyUSB0",
+		"--device=/dev/ttyACM1:/dev/ttyACM1",
+		"--device=/dev/ttyUSB1:/dev/ttyUSB1",
+	]
+}
+

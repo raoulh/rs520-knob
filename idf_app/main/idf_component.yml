@@ -1,0 +1,10 @@
+dependencies:
+  idf:
+    version: ">=5.0"
+  lvgl/lvgl:
+    version: "^9.5.0"
+  espressif/esp_lvgl_port:
+    version: "^2.7"
+  esp_lcd_sh8601:
+    version: "*"
+    public: true

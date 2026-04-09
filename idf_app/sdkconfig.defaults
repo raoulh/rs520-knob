@@ -1,0 +1,56 @@
+# rs520-knob sdkconfig.defaults
+# Target: Waveshare ESP32-S3-Knob-Touch-LCD-1.8
+# Run: idf.py set-target esp32s3 (once, before first build)
+
+# --- Partition Table ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+CONFIG_PARTITION_TABLE_MD5=y
+
+# --- Flash (16MB) ---
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+
+# --- PSRAM (8MB Octal SPI @ 80MHz) ---
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_BOOT_INIT=y
+CONFIG_SPIRAM_USE_MALLOC=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+
+# --- Compiler (C++20, no exceptions, no RTTI) ---
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# --- Brownout Detection ---
+# Level 4 (2.50V) — prevents false triggers during WiFi TX spikes on battery
+CONFIG_ESP_BROWNOUT_DET=y
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_4=y
+CONFIG_ESP_BROWNOUT_DET_LVL=4
+
+# --- FreeRTOS ---
+CONFIG_FREERTOS_HZ=1000
+
+# --- Network Identity ---
+CONFIG_LWIP_LOCAL_HOSTNAME="rs520-knob"
+CONFIG_LWIP_NETIF_HOSTNAME=y
+
+# --- LVGL Configuration ---
+# Color: 16-bit RGB565 (hardware native)
+CONFIG_LV_COLOR_DEPTH_16=y
+
+# Logging
+CONFIG_LV_USE_LOG=y
+CONFIG_LV_LOG_LEVEL_WARN=y
+
+# Built-in fonts
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+
+# Disable unused LVGL features to save flash
+# CONFIG_LV_BUILD_EXAMPLES is not set
+# CONFIG_LV_USE_TJPGD is not set

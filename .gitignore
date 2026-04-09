@@ -1,0 +1,23 @@
+# ==== ESP-IDF Build ====
+idf_app/build/
+idf_app/sdkconfig
+idf_app/sdkconfig.old
+
+# ==== Managed Components (fetched by idf component manager) ====
+idf_app/managed_components/
+idf_app/dependencies.lock
+
+# ==== Editor / IDE ====
+.vscode/
+*.swp
+*.swo
+*~
+
+# ==== OS junk ====
+.DS_Store
+Thumbs.db
+
+# ==== Python (ESP-IDF tooling) ====
+__pycache__/
+*.py[cod]
+*.egg-info/

@@ -1,0 +1,16 @@
+{
+    "folders": [
+        {
+            "path": "."
+        },
+        {
+            "name": "ESP-IDF App",
+            "path": "idf_app"
+        }
+    ],
+    "settings": {
+        "chat.tools.terminal.autoApprove": {
+            "idf.py": true
+        }
+    }
+}

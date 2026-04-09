@@ -1,0 +1,14 @@
+services:
+  bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rs520-bridge
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - RS520_HOST=${RS520_HOST:-192.168.30.135}
+      - RS520_PORT=${RS520_PORT:-9283}
+      - WS_PORT=${WS_PORT:-8080}
+      - NOTIFY_PORT=${NOTIFY_PORT:-9284}
+      - POLL_INTERVAL=${POLL_INTERVAL:-5s}

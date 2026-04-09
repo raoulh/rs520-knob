@@ -7,6 +7,10 @@ idf_app/sdkconfig.old
 idf_app/managed_components/
 idf_app/dependencies.lock
 
+# ==== Go Bridge ====
+bridge/bridge
+bridge/coverage.out
+
 # ==== Editor / IDE ====
 .vscode/
 *.swp

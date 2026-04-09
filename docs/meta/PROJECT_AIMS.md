@@ -64,21 +64,26 @@ Battery-powered WiFi remote control for **HiFi Rose RS520** amplifier. Rotary kn
 
 ### Knob ↔ Bridge Protocol (WebSocket JSON)
 
-```jsonc
-// Knob → Bridge
-{"cmd": "volume", "value": 25}
-{"cmd": "play_pause"}
-{"cmd": "next"}
-{"cmd": "prev"}
-{"cmd": "power", "value": "toggle"}
-{"cmd": "mute"}
+Endpoint: `ws://{bridge_ip}:8080/ws`
 
-// Bridge → Knob
-{"evt": "state", "volume": 25, "mute": false, "playing": true, "title": "...", "artist": "..."}
-{"evt": "volume", "value": 30}
-{"evt": "artwork", "url": "/art/current.jpg"}  // or binary frame
-{"evt": "connected", "device": "RoseSalon"}
+```jsonc
+// Knob → Bridge (commands)
+{"cmd": "volume", "value": 25}     // Set volume 0-100
+{"cmd": "play_pause"}               // Toggle play/pause
+{"cmd": "next"}                     // Next track
+{"cmd": "prev"}                     // Previous track
+{"cmd": "mute"}                     // Toggle mute
+{"cmd": "power"}                    // Toggle power on/off
+
+// Bridge → Knob (events)
+{"evt": "state", "volume": 25, "mute": false, "playing": true, "title": "...", "artist": "...", "album": "...", "source": "tidal", "powerOn": true}
+{"evt": "volume", "volume": 30}
+{"evt": "artwork", "url": "/art/current?id=abc123&format=jpeg"}
+{"evt": "connected", "device": "RS520"}
+{"evt": "error", "title": "unknown command: \"foo\""}  // bad command feedback
 ```
+
+On connect, bridge sends `evt:state` (full snapshot) + `evt:connected` immediately.
 
 ### RS520 API Endpoints Used by Bridge
 

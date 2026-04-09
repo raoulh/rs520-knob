@@ -16,8 +16,11 @@ Delivering and rendering now-playing artwork on the ESP32-S3's 360×360 display.
 The Go bridge proxies and resizes artwork from the RS520:
 
 ```
-GET /art/current?width=360&height=360&format=rgb565
+GET http://{bridge_ip}:8080/art/current?id={albumArtId}&format=rgb565
+GET http://{bridge_ip}:8080/art/current?id={albumArtId}&format=jpeg
 ```
+
+The `id` parameter comes from the `evt:artwork` WebSocket event's `url` field. The bridge fetches from `http://{rs520}:8000/v1/albumarts/{id}`, resizes to 360×360, and returns the result. Supports `ETag` / `If-None-Match` → 304 Not Modified.
 
 ### Response Options
 

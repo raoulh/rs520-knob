@@ -4,6 +4,9 @@
 #include "encoder.h"
 #include "haptic.h"
 #include "progress_ui.h"
+#include "status_bar.h"
+#include "battery.h"
+#include "battery_ui.h"
 #include "wifi_manager.h"
 #include "wifi_provision.h"
 #include "wifi_status_ui.h"
@@ -26,6 +29,11 @@ namespace
 constexpr const char* kTag = "main";
 constexpr int kEncoderTaskStack = 3072;
 constexpr int kEncoderTaskPrio  = 5;
+
+/// Backlight brightness for each battery state
+constexpr uint8_t kBrightnessNormal   = 255;
+constexpr uint8_t kBrightnessLow      = 128;  // 50%
+constexpr uint8_t kBrightnessCritical = 64;   // 25%
 
 /// Task: reads encoder queue, updates progress UI + fires haptic click.
 /// Runs forever. Blocks on queue (no busy-wait).
@@ -58,6 +66,38 @@ void encoder_task(void* /*arg*/)
             // Haptic click for feedback
             rs520::haptic_click();
         }
+    }
+}
+
+/// Battery state change callback — called from battery monitor task.
+/// Uses lv_async_call for UI, direct call for backlight (no LVGL).
+void battery_state_cb(rs520::BatteryState state, int percentage, void* /*ctx*/)
+{
+    // Update battery UI (thread-safe via lv_async_call internally)
+    rs520::battery_ui_update(state, percentage);
+
+    // Adjust backlight based on battery state
+    switch (state)
+    {
+    case rs520::BatteryState::kCritical:
+        rs520::backlight_set(kBrightnessCritical);
+        // Show warning overlay (once per transition)
+        lv_async_call([](void* /*d*/) {
+            rs520::battery_ui_show_warning();
+        }, nullptr);
+        break;
+
+    case rs520::BatteryState::kLow:
+        rs520::backlight_set(kBrightnessLow);
+        lv_async_call([](void* /*d*/) {
+            rs520::battery_ui_show_warning();
+        }, nullptr);
+        break;
+
+    case rs520::BatteryState::kCharging:
+    case rs520::BatteryState::kNormal:
+        rs520::backlight_set(kBrightnessNormal);
+        break;
     }
 }
 
@@ -100,11 +140,13 @@ extern "C" void app_main()
     // Display (SH8601 QSPI + registered with esp_lvgl_port)
     ESP_ERROR_CHECK(rs520::display_init());
 
-    // Touch input + Progress bar UI + WiFi status icon
+    // Touch input + Progress bar UI + Status bar + WiFi/Battery icons
     lvgl_port_lock(0);
     ESP_ERROR_CHECK(rs520::touch_init());
     rs520::progress_ui_create();
+    rs520::status_bar_create();
     rs520::wifi_status_ui_create();
+    rs520::battery_ui_create();
     lvgl_port_unlock();
 
     // Smooth backlight fade-in (screen content already rendered)
@@ -113,6 +155,10 @@ extern "C" void app_main()
     // Encoder → UI + haptic task
     xTaskCreate(encoder_task, "encoder", kEncoderTaskStack, nullptr,
                 kEncoderTaskPrio, nullptr);
+
+    // Battery monitor (ADC1_CH0 on GPIO 1, samples every 30s)
+    rs520::battery_on_state_change(battery_state_cb, nullptr);
+    ESP_ERROR_CHECK(rs520::battery_init());
 
     // WiFi: init driver, then connect or provision
     ESP_ERROR_CHECK(rs520::wifi_init());

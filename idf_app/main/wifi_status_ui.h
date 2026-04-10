@@ -7,8 +7,8 @@
 namespace rs520
 {
 
-/// Create WiFi status icon on active screen (top-right area).
-/// Must be called inside lvgl_port_lock/unlock.
+/// Create WiFi status icon as child of status bar container.
+/// Must be called inside lvgl_port_lock/unlock, after status_bar_create().
 void wifi_status_ui_create();
 
 /// Update WiFi status display. Safe to call from any context —

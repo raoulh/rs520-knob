@@ -1,7 +1,9 @@
 #include "wifi_status_ui.h"
 #include "wifi_manager.h"
+#include "status_bar.h"
 
 #include "esp_lvgl_port.h"
+#include "esp_log.h"
 #include "lvgl.h"
 
 #include <cstdio>
@@ -11,8 +13,6 @@ namespace
 {
 
 constexpr int kIconSize    = 28;
-constexpr int kIconMarginR = 30;  // inset from right for round bezel
-constexpr int kIconMarginT = 30;  // inset from top for round bezel
 
 constexpr lv_color_t kColorOk   = {.blue = 0xA3, .green = 0xCC, .red = 0x4E};  // Green
 constexpr lv_color_t kColorWarn  = {.blue = 0x4A, .green = 0xC4, .red = 0xE9};  // Yellow-ish
@@ -104,15 +104,17 @@ namespace rs520
 
 void wifi_status_ui_create()
 {
-    auto* scr = lv_scr_act();
+    auto* parent = status_bar_container();
+    if (!parent)
+    {
+        ESP_LOGE("wifi_ui", "Status bar not created — call status_bar_create() first");
+        return;
+    }
 
-    s_icon_label = lv_label_create(scr);
-    lv_obj_set_style_text_font(s_icon_label, &lv_font_montserrat_28, 0);
+    s_icon_label = lv_label_create(parent);
+    lv_obj_set_style_text_font(s_icon_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_icon_label, kColorErr, 0);
     lv_label_set_text(s_icon_label, LV_SYMBOL_CLOSE);  // disconnected initially
-
-    // Position top-right (inset for round display)
-    lv_obj_align(s_icon_label, LV_ALIGN_TOP_RIGHT, -kIconMarginR, kIconMarginT);
 
     // Register for WiFi state changes
     wifi_on_state_change(wifi_state_cb, nullptr);

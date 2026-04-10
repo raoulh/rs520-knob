@@ -104,23 +104,32 @@ func main() {
 	}()
 
 	// mDNS service advertisement
+	// Pass explicit IPs — hashicorp/mdns cannot resolve Docker hostnames
+	var mdnsIPs []net.IP
+	if bridgeIP != "" {
+		mdnsIPs = []net.IP{net.ParseIP(bridgeIP)}
+	}
 	mdnsService, err := mdns.NewMDNSService(
 		"RS520 Bridge",       // instance name
 		"_rs520bridge._tcp",  // service type
 		"",                   // domain (default .local)
 		"",                   // host (auto)
 		cfg.WSPort,           // port
-		nil,                  // IPs (auto)
+		mdnsIPs,              // explicit IPs
 		[]string{"version=0.1.0", fmt.Sprintf("rs520=%s", cfg.RS520Host)}, // TXT
 	)
 	if err != nil {
-		log.Fatalf("[mdns] service error: %v", err)
+		log.Printf("[mdns] WARNING: service init failed: %v — mDNS disabled", err)
 	}
-	mdnsServer, err := mdns.NewServer(&mdns.Config{Zone: mdnsService})
-	if err != nil {
-		log.Fatalf("[mdns] server error: %v", err)
+	var mdnsServer *mdns.Server
+	if mdnsService != nil {
+		mdnsServer, err = mdns.NewServer(&mdns.Config{Zone: mdnsService})
+		if err != nil {
+			log.Printf("[mdns] WARNING: server start failed: %v — mDNS disabled", err)
+		} else {
+			log.Printf("[mdns] advertising _rs520bridge._tcp on port %d (IP: %s)", cfg.WSPort, bridgeIP)
+		}
 	}
-	log.Printf("[mdns] advertising _rs520bridge._tcp on port %d", cfg.WSPort)
 
 	// Graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -129,7 +138,9 @@ func main() {
 	log.Printf("[bridge] received %s, shutting down...", sig)
 
 	ticker.Stop()
-	mdnsServer.Shutdown()
+	if mdnsServer != nil {
+		mdnsServer.Shutdown()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

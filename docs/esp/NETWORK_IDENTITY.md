@@ -2,6 +2,10 @@
 
 Making the ESP32-S3 knob identifiable on the local network for bridge discovery and router visibility.
 
+## Status
+
+**Implemented** in `wifi_manager.cpp`. DHCP hostname is set during `wifi_init()` before `esp_wifi_start()`. mDNS managed component (`espressif/mdns`) added to `idf_component.yml` — initialization pending (mDNS `init()` + `hostname_set()` after IP acquired).
+
 ## Problem
 
 ESP32 devices appear as "espressif" or "Unknown" in router client lists, making them hard to identify and debug.
@@ -96,6 +100,47 @@ void sanitize_hostname(const char* input, char* output, size_t len) {
     output[j] = '\0';
 }
 ```
+
+## WiFi Provisioning (SoftAP Captive Portal)
+
+Implemented in `wifi_provision.cpp`. When no credentials are stored (or connection fails 3 times), the device enters provisioning mode:
+
+1. Starts SoftAP: `RS520-Knob-XXYYZZ` (MAC-based, open, channel 1, max 1 client)
+2. DNS server redirects all queries to `192.168.4.1`
+3. HTTP server serves captive portal form at `/`
+4. User selects SSID from scan results + enters password
+5. Credentials stored in NVS → device switches to STA mode
+
+### Captive Portal Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/` | GET | HTML form (SSID dropdown + password) |
+| `/scan` | GET | JSON array of visible APs |
+| `/connect` | POST | Store creds, start STA connect |
+| `/status` | GET | Connection result polling |
+| `/*` | GET | 302 redirect to `/` (captive portal trigger) |
+
+### NVS Credential Storage
+
+Namespace: `wifi`
+
+| Key | Type | Purpose |
+|-----|------|---------|
+| `ssid` | string | WiFi SSID (max 32 chars) |
+| `pass` | string | WiFi password (max 64 chars) |
+| `bssid` | blob (6B) | AP MAC for fast reconnect |
+| `channel` | uint8 | AP channel for fast reconnect |
+
+## Fast Reconnect
+
+On successful connection, `wifi_manager.cpp` stores the AP's BSSID and channel in NVS. On next boot, the device connects directly using `bssid_set=true` + specific channel — skipping the scan phase entirely. This reduces connection time to ~500ms vs 2–3s with full scan.
+
+If fast connect fails (AP moved/replaced), falls back to full all-channel scan sorted by RSSI.
+
+## AP Roaming
+
+Roaming task runs every 60s when connected. Does passive scan for same SSID. Switches to stronger AP if signal delta > 8 dBm (hysteresis prevents flapping).
 
 ## Related Docs
 

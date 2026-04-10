@@ -68,7 +68,20 @@ idf.py fullclean && idf.py build
 rs520-knob/
 ├── idf_app/              # ESP-IDF project root
 │   ├── main/             # Application source (C++20)
+│   │   ├── main.cpp          # Boot sequence, task creation
+│   │   ├── wifi_manager.*    # WiFi STA, NVS creds, roaming
+│   │   ├── wifi_provision.*  # SoftAP captive portal provisioning
+│   │   ├── wifi_status_ui.*  # LVGL WiFi status icon
+│   │   ├── display_driver.*  # SH8601 QSPI init
+│   │   ├── touch_driver.*    # CST816 touch input
+│   │   ├── encoder.*         # Rotary encoder polling
+│   │   ├── haptic.*          # DRV2605 haptic driver
+│   │   ├── backlight.*       # PWM backlight control
+│   │   └── progress_ui.*     # Arc progress bar UI
 │   ├── components/       # Custom components
+│   │   ├── i2c_bsp/          # I2C bus init
+│   │   ├── lcd_touch_bsp/    # Touch controller BSP
+│   │   └── dns_server/       # DNS redirect for captive portal
 │   ├── sdkconfig.defaults
 │   └── partitions.csv
 ├── bridge/               # Go bridge (WebSocket ↔ RS520 HTTPS)
@@ -187,6 +200,52 @@ ws://{bridge_ip}:8080/ws
 **Artwork**: When an `artwork` event arrives with a `url` like `/art/current?id=abc&format=jpeg`, the knob fetches it via HTTP GET from the bridge (same host, port 8080). For RGB565 raw pixels (zero decode on device), use `format=rgb565` — returns exactly 259,200 bytes (360×360×2, big-endian).
 
 **Reconnection**: The knob should reconnect on disconnect with exponential backoff.
+
+## WiFi Connection
+
+The ESP32-S3 connects to WiFi as a station (STA). Credentials are stored in NVS.
+
+### Boot Connection Sequence
+
+1. **Fast connect** — If stored BSSID + channel exist in NVS, connect directly (skips scan, ~500ms)
+2. **Scan fallback** — If fast connect fails, full all-channel scan sorted by RSSI, pick strongest
+3. **Provisioning** — If no creds stored or 3 failures, start SoftAP captive portal
+
+### WiFi Provisioning (SoftAP)
+
+First-time setup or credential reset:
+
+1. Device starts SoftAP: `RS520-Knob-XXYYZZ` (open, no password)
+2. User connects phone/laptop to this WiFi
+3. Captive portal auto-opens (DNS redirect + DHCP Option 114)
+4. Select network from scan dropdown, enter password, submit
+5. Device stores creds in NVS, switches to STA, connects
+
+To re-enter provisioning: long-press encoder at boot (TODO: implement) or erase NVS.
+
+### AP Roaming
+
+Background task every 60s does passive scan. If a stronger AP with same SSID is found (>8 dBm delta), device roams to it. BSSID + channel updated in NVS.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `wifi_manager.cpp` | STA connect, NVS storage, roaming task, event handlers |
+| `wifi_provision.cpp` | SoftAP, HTTP server, captive portal HTML, DNS redirect |
+| `wifi_status_ui.cpp` | LVGL status icon (top-right), provisioning overlay |
+| `components/dns_server/` | DNS redirect component (from ESP-IDF example) |
+
+### WiFi sdkconfig Tuning
+
+```
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6    # Reduced from 10 to save RAM
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=12
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER=y
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=12
+```
+
+WiFi driver uses ~70KB internal RAM. Monitor with `heap_caps_get_free_size(MALLOC_CAP_INTERNAL)`.
 
 ## Debugging
 

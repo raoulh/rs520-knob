@@ -44,4 +44,34 @@ Capture learnings after each bug, gotcha, or non-obvious discovery.
 **Fix**: Don't use the macro — replicate the config manually with proper casts (`static_cast<gpio_num_t>(-1)`)
 **Prevention**: Inspect third-party C macros before using them in C++ code. Prefer manual struct init.
 
+### ESP-IDF v6.0 — DNS Server Header Missing Include
+**Symptom**: `'esp_ip4_addr_t' does not name a type` when including `dns_server.h` from C++
+**Root Cause**: The ESP-IDF example `dns_server.h` relies on transitive includes via `esp_netif.h` in the `.c` file but doesn't include the IP addr type header itself. When included from C++ with strict includes, the type is unknown.
+**Fix**: Add `#include "esp_netif_ip_addr.h"` to `dns_server.h`
+**Prevention**: When copying ESP-IDF example components, check that headers are self-contained — add missing includes for all types used in the header.
+
+### ESP-IDF v6.0 — DNS_SERVER_CONFIG_SINGLE Macro Triggers -Werror in C++
+**Symptom**: `DNS_SERVER_CONFIG_SINGLE("*", "WIFI_AP_DEF")` fails with `-Werror=missing-field-initializers`
+**Root Cause**: The macro uses C designated initializer syntax that doesn't zero-initialize all fields. ESP-IDF v6.0's `-Werror` treats this as an error in C++.
+**Fix**: Don't use the macro — zero-init the struct with `= {}` then set fields individually.
+**Prevention**: Same pattern as other ESP-IDF struct init: always `struct_t x = {};` then field assignment.
+
+### ESP-IDF set-target Required After sdkconfig Delete
+**Symptom**: Build targets wrong chip (esp32 instead of esp32s3) after `rm sdkconfig`
+**Root Cause**: `rm sdkconfig` also loses the target setting. `idf.py build` defaults to esp32.
+**Fix**: `rm sdkconfig && idf.py set-target esp32s3 && idf.py build`
+**Prevention**: Always re-run `idf.py set-target esp32s3` after deleting sdkconfig. Consider a build script.
+
+### WiFi Driver RAM Usage
+**Symptom**: Need to plan memory budget when adding WiFi to an LVGL project
+**Root Cause**: WiFi driver allocates ~70KB internal RAM at `esp_wifi_init()`
+**Fix**: Reduce `STATIC_RX_BUFFER_NUM` from 10→6 and `DYNAMIC_RX_BUFFER_NUM` from 32→12 in sdkconfig.defaults. ESP32-S3 has 512KB internal — draw buffers (50KB) + WiFi (70KB) leaves ~390KB free.
+**Prevention**: Always check `heap_caps_get_free_size(MALLOC_CAP_INTERNAL)` after WiFi init before adding more features.
+
+### mDNS in ESP-IDF v6.0 is a Managed Component
+**Symptom**: `#include "mdns.h"` not found with default ESP-IDF components
+**Root Cause**: In IDF v6.0, mDNS was moved out of core into `espressif/mdns` managed component
+**Fix**: Add `espressif/mdns: version: "*"` to `idf_component.yml`
+**Prevention**: Check component availability in managed registry when porting from older IDF versions.
+
 <!-- Add new lessons above -->

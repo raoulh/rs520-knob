@@ -55,7 +55,7 @@ idf.py menuconfig
 idf.py set-target esp32s3
 
 # Clean rebuild (when sdkconfig.defaults change)
-rm sdkconfig && idf.py build
+rm sdkconfig && idf.py set-target esp32s3 && idf.py build
 
 # Full clean
 idf.py fullclean && idf.py build
@@ -120,7 +120,8 @@ gh pr create --fill
 - **Input handling** → `docs/esp/ROTARY_ENCODER.md`, `docs/esp/TOUCH_INPUT.md`, `docs/esp/SWIPE_GESTURES.md`
 - **Haptic feedback** → `docs/esp/hw-reference/drv2605.md`
 - **Battery/power** → `docs/esp/BATTERY_MONITORING.md`, `docs/esp/hw-reference/battery.md`
-- **WiFi/networking** → `docs/esp/NETWORK_IDENTITY.md`
+- **WiFi/networking** → `docs/esp/NETWORK_IDENTITY.md` (provisioning, NVS creds, roaming, captive portal)
+- **WiFi code** → `idf_app/main/wifi_manager.*`, `wifi_provision.*`, `wifi_status_ui.*`
 - **Artwork rendering** → `docs/esp/hw-reference/image_render.md`, `docs/esp/hw-reference/COLORTEST_HELLOWORLD.md`
 - **Pin assignments** → `docs/esp/hw-reference/HARDWARE_PINS.md`
 - **Dual-chip** → `docs/esp/DUAL_CHIP_ARCHITECTURE.md`
@@ -133,14 +134,20 @@ gh pr create --fill
 
 ```
 ESP32-S3 Knob ──WebSocket──→ Go Bridge (Docker) ──HTTPS :9283──→ Rose RS520
-                              ├─ notification listener :9284 ←── RS520 push
-                              ├─ artwork proxy (resize 360×360)
-                              └─ state cache (push diffs via WS)
+     │                        ├─ notification listener :9284 ←── RS520 push
+     │                        ├─ artwork proxy (resize 360×360)
+     │                        └─ state cache (push diffs via WS)
+     │
+     ├─ WiFi STA (fast BSSID+channel reconnect from NVS)
+     ├─ SoftAP provisioning (captive portal, DNS redirect, HTTP form)
+     └─ AP roaming (60s passive scan, 8dBm hysteresis)
 ```
 
 - **Knob talks WebSocket only** — no TLS, no HTTP server, minimal overhead
 - **Bridge handles RS520 complexity** — self-signed TLS, push notifications, artwork resize
 - **RS520 API ref**: `docs/dev/RS520_FULL_API_REF.md` (113 endpoints, reverse-engineered)
+- **WiFi provisioning**: SoftAP captive portal with DNS redirect + DHCP Option 114
+- **NVS storage**: WiFi SSID, password, BSSID, channel in `wifi` namespace
 
 ## Task Management
 

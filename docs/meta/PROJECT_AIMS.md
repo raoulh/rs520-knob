@@ -122,6 +122,8 @@ On connect, bridge sends `evt:state` (full snapshot) + `evt:connected` immediate
 - [ ] Rotary encoder → volume control (debounced, smooth)
 - [ ] DRV2605 haptic tick on encoder rotation
 - [ ] WiFi auto-connect (NVS-stored credentials)
+- [x] WiFi STA connection with fast BSSID+channel reconnect
+- [x] WiFi SoftAP captive portal provisioning
 - [ ] WebSocket client to Go bridge (connect, reconnect, JSON protocol)
 - [ ] RS520 control via bridge: volume get/set, transport (play/pause/next/prev), power on/off
 - [ ] Touch buttons: play/pause, next, previous, power
@@ -133,7 +135,9 @@ On connect, bridge sends `evt:state` (full snapshot) + `evt:connected` immediate
 
 ### P1 — Should Have
 
-- [ ] WiFi provisioning (SoftAP captive portal for first-time setup)
+- [x] WiFi provisioning (SoftAP captive portal for first-time setup)
+- [x] WiFi AP roaming (periodic scan, switch to strongest)
+- [x] WiFi status indicator on LVGL display
 - [ ] OTA firmware updates
 - [ ] Low-battery warning + auto-shutdown
 - [ ] Backlight dimming on idle (PWM fade)

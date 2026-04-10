@@ -10,6 +10,8 @@
 #include "esp_http_client.h"
 #include "esp_heap_caps.h"
 #include "mdns.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 #include "cJSON.h"
 
 #include "freertos/FreeRTOS.h"
@@ -29,11 +31,15 @@ namespace
 constexpr const char* kTag = "bridge";
 constexpr const char* kServiceType = "_rs520bridge";
 constexpr const char* kServiceProto = "_tcp";
+constexpr const char* kNvsNamespace = "bridge";
+constexpr const char* kNvsKeyHost   = "host";
+constexpr const char* kNvsKeyPort   = "port";
 constexpr int kDiscoveryTaskStack  = 8192;
 constexpr int kDiscoveryTaskPrio   = 4;
-constexpr int kMdnsTimeoutMs       = 5000;
+constexpr int kMdnsTimeoutMs       = 3000;
 constexpr int kRetryDelayMs        = 3000;
 constexpr int kThrottleUs          = 30000;  // 30ms
+constexpr int kCachedWsTimeoutMs   = 2000;  // quick fail for cached address
 
 constexpr int kArtFetchTaskStack   = 6144;
 constexpr int kArtFetchTaskPrio    = 3;
@@ -66,6 +72,41 @@ static char s_last_etag[64] = {};
 struct ArtUrlMsg {
     char path[256];
 };
+
+// --- NVS bridge cache helpers ---
+static bool nvs_load_bridge(char* host, size_t host_len, uint16_t* port)
+{
+    nvs_handle_t h;
+    if (nvs_open(kNvsNamespace, NVS_READONLY, &h) != ESP_OK) return false;
+
+    size_t len = host_len;
+    bool ok = (nvs_get_str(h, kNvsKeyHost, host, &len) == ESP_OK);
+    if (ok) ok = (nvs_get_u16(h, kNvsKeyPort, port) == ESP_OK);
+    nvs_close(h);
+    return ok && host[0] != '\0' && *port != 0;
+}
+
+static void nvs_save_bridge(const char* host, uint16_t port)
+{
+    nvs_handle_t h;
+    if (nvs_open(kNvsNamespace, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_str(h, kNvsKeyHost, host);
+    nvs_set_u16(h, kNvsKeyPort, port);
+    nvs_commit(h);
+    nvs_close(h);
+    ESP_LOGI(kTag, "cached bridge %s:%u in NVS", host, port);
+}
+
+static void nvs_clear_bridge()
+{
+    nvs_handle_t h;
+    if (nvs_open(kNvsNamespace, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_erase_key(h, kNvsKeyHost);
+    nvs_erase_key(h, kNvsKeyPort);
+    nvs_commit(h);
+    nvs_close(h);
+    ESP_LOGI(kTag, "cleared cached bridge from NVS");
+}
 
 static void set_state(rs520::BridgeState new_state)
 {
@@ -400,7 +441,8 @@ static void ws_event_handler(void* /*arg*/, esp_event_base_t /*base*/,
 }
 
 // --- Connect to bridge at given IP:port ---
-static bool connect_ws(const char* host, uint16_t port)
+// timeout_ms: how long to wait for WS CONNECTED event (0 = fire-and-forget)
+static bool connect_ws(const char* host, uint16_t port, int timeout_ms = 0)
 {
     // Store bridge address for HTTP artwork fetch
     snprintf(s_bridge_host, sizeof(s_bridge_host), "%s", host);
@@ -440,10 +482,31 @@ static bool connect_ws(const char* host, uint16_t port)
         return false;
     }
 
+    // Optionally wait for connection (used for cached-address fast path)
+    if (timeout_ms > 0)
+    {
+        int elapsed = 0;
+        constexpr int kPollMs = 50;
+        while (elapsed < timeout_ms)
+        {
+            if (esp_websocket_client_is_connected(s_ws_client)) return true;
+            vTaskDelay(pdMS_TO_TICKS(kPollMs));
+            elapsed += kPollMs;
+        }
+        // Timed out — tear down, caller will fall back to mDNS
+        ESP_LOGW(kTag, "cached bridge connect timed out");
+        esp_websocket_client_stop(s_ws_client);
+        esp_websocket_client_destroy(s_ws_client);
+        s_ws_client = nullptr;
+        s_bridge_host[0] = '\0';
+        s_bridge_port = 0;
+        return false;
+    }
+
     return true;
 }
 
-// --- Discovery task: mDNS browse → WS connect → retry loop ---
+// --- Discovery task: cached → mDNS browse → WS connect → retry loop ---
 static void discovery_task(void* /*arg*/)
 {
     // Initialize mDNS
@@ -457,6 +520,23 @@ static void discovery_task(void* /*arg*/)
              mac[3], mac[4], mac[5]);
     mdns_hostname_set(hostname);
     ESP_LOGI(kTag, "mDNS hostname: %s.local", hostname);
+
+    // --- Fast path: try cached bridge address first ---
+    char cached_host[16] = {};
+    uint16_t cached_port = 0;
+    if (nvs_load_bridge(cached_host, sizeof(cached_host), &cached_port))
+    {
+        ESP_LOGI(kTag, "trying cached bridge %s:%u", cached_host, cached_port);
+        if (connect_ws(cached_host, cached_port, kCachedWsTimeoutMs))
+        {
+            ESP_LOGI(kTag, "cached bridge connected");
+        }
+        else
+        {
+            ESP_LOGW(kTag, "cached bridge failed, falling back to mDNS");
+            nvs_clear_bridge();
+        }
+    }
 
     for (;;)
     {
@@ -496,6 +576,10 @@ static void discovery_task(void* /*arg*/)
                     snprintf(ip, sizeof(ip), IPSTR, IP2STR(&a->addr.u_addr.ip4));
                     ESP_LOGI(kTag, "found bridge at %s:%u", ip, r->port);
                     connected = connect_ws(ip, r->port);
+                    if (connected)
+                    {
+                        nvs_save_bridge(ip, r->port);
+                    }
                 }
             }
         }

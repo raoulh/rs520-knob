@@ -80,4 +80,19 @@ Capture learnings after each bug, gotcha, or non-obvious discovery.
 **Fix**: Add `espressif/cjson: "^1.7.18"` to `idf_component.yml` + `espressif__cjson` to `PRIV_REQUIRES` in CMakeLists.txt
 **Prevention**: Never parse JSON manually — always use cJSON. When migrating to IDF v6.0, check all formerly-core components (mDNS, cJSON, etc.) and add as managed dependencies.
 
+### Boot Time Optimization — Parallel WiFi + NVS Bridge Cache
+**Symptom**: Device took ~10s from boot to usable UI (artwork displayed). WiFi blocked main thread (~1.2s), mDNS discovery added ~5s every boot, all init was sequential.
+**Root Cause**: `wifi_connect()` blocked `app_main()` — display/I2C/UI init waited for WiFi. `bridge_discovery_init()` ran mDNS query every boot (5s timeout) even though bridge IP rarely changes.
+**Fix**: Three changes reduced boot-to-usable from 10.6s → 3.6s (66% faster):
+1. **Parallel WiFi** — `wifi_init()` moved before LVGL/I2C init, `wifi_connect()` runs in `net_task` (background FreeRTOS task). WiFi association overlaps with display init.
+2. **NVS bridge cache** — Store bridge IP:port in NVS (`bridge` namespace, keys `host`/`port`) after successful mDNS discovery. On boot, try cached address first (2s WS connect timeout). If fails, clear cache and fall back to mDNS.
+3. **mDNS timeout** — Reduced from 5s to 3s for fallback-only queries.
+**Prevention**: Always profile boot timeline with log timestamps. Look for sequential blocking calls that can be parallelized. Cache network discovery results in NVS.
+
+### Parallel Init Race — LVGL Widgets Not Yet Created
+**Symptom**: When `net_task` runs WiFi + provisioning in parallel with main thread HW init, provisioning path calls `wifi_status_ui_show_provision()` before LVGL widgets exist → crash.
+**Root Cause**: `wifi_connect()` with no NVS creds returns instantly (`ESP_ERR_NVS_NOT_FOUND`), faster than main thread can create UI widgets.
+**Fix**: Event group sync gate (`s_boot_events` with `kBitUiReady`). Main thread sets bit after `lvgl_port_unlock()`. `net_task` waits for it before touching LVGL.
+**Prevention**: When moving blocking init to background tasks, identify all LVGL calls in the new task and gate them on UI readiness. Use event groups or semaphores, not `vTaskDelay()` hacks.
+
 <!-- Add new lessons above -->

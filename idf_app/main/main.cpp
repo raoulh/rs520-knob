@@ -22,6 +22,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
 #include "freertos/task.h"
 #include "lvgl.h"
 
@@ -33,6 +34,12 @@ namespace
 constexpr const char* kTag = "main";
 constexpr int kEncoderTaskStack = 3072;
 constexpr int kEncoderTaskPrio  = 5;
+constexpr int kNetTaskStack     = 4096;
+constexpr int kNetTaskPrio      = 4;
+
+/// Sync gate: net_task waits for UI init before touching LVGL widgets
+constexpr int kBitUiReady = BIT0;
+static EventGroupHandle_t s_boot_events = nullptr;
 
 /// Backlight brightness for each battery state
 constexpr uint8_t kBrightnessNormal   = 255;
@@ -137,6 +144,37 @@ void battery_state_cb(rs520::BatteryState state, int percentage, void* /*ctx*/)
     }
 }
 
+/// Task: WiFi connect + provisioning + bridge discovery.
+/// Runs on a background task so HW init can proceed in parallel.
+void net_task(void* /*arg*/)
+{
+    esp_err_t wifi_ret = rs520::wifi_connect();
+    if (wifi_ret == ESP_ERR_NVS_NOT_FOUND || wifi_ret == ESP_FAIL)
+    {
+        ESP_LOGW(kTag, "No WiFi credentials or connection failed — starting provisioning");
+
+        // provision_start() is WiFi-only (AP + HTTP), no LVGL needed
+        ESP_ERROR_CHECK(rs520::provision_start());
+
+        // Wait for UI widgets to be created before updating them
+        xEventGroupWaitBits(s_boot_events, kBitUiReady, pdFALSE, pdTRUE, portMAX_DELAY);
+
+        lvgl_port_lock(0);
+        rs520::wifi_status_ui_show_provision(rs520::provision_ssid());
+        lvgl_port_unlock();
+
+        // Wait for WiFi to actually connect via provisioning before starting bridge
+        ESP_LOGI(kTag, "Waiting for WiFi provisioning...");
+        rs520::wifi_wait_connected(120000);  // 2 min timeout for user to provision
+    }
+
+    // Start bridge mDNS discovery + WebSocket client (needs WiFi)
+    ESP_ERROR_CHECK(rs520::bridge_discovery_init());
+
+    ESP_LOGI(kTag, "Network init complete");
+    vTaskDelete(nullptr);
+}
+
 }  // namespace
 
 extern "C" void app_main()
@@ -151,6 +189,20 @@ extern "C" void app_main()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // Boot sync event group
+    s_boot_events = xEventGroupCreate();
+
+    // WiFi: init driver early so association runs in parallel with HW init
+    ESP_ERROR_CHECK(rs520::wifi_init());
+
+    // Bridge state callback (connection popup) — register before net_task spawns
+    rs520::bridge_on_state_change(bridge_state_cb, nullptr);
+
+    // Spawn network task: wifi_connect + provisioning + bridge discovery
+    // Runs in parallel with display/I2C/UI init below
+    xTaskCreate(net_task, "net_init", kNetTaskStack, nullptr,
+                kNetTaskPrio, nullptr);
 
     // Initialize esp_lvgl_port (creates LVGL task, tick timer, mutex)
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
@@ -188,6 +240,9 @@ extern "C" void app_main()
     rs520::connection_ui_create();
     lvgl_port_unlock();
 
+    // Signal net_task that UI widgets are ready
+    xEventGroupSetBits(s_boot_events, kBitUiReady);
+
     // Smooth backlight fade-in (screen content already rendered)
     rs520::backlight_fade_in(255, 800);
 
@@ -198,27 +253,6 @@ extern "C" void app_main()
     // Battery monitor (ADC1_CH0 on GPIO 1, samples every 30s)
     rs520::battery_on_state_change(battery_state_cb, nullptr);
     ESP_ERROR_CHECK(rs520::battery_init());
-
-    // WiFi: init driver, then connect or provision
-    ESP_ERROR_CHECK(rs520::wifi_init());
-
-    // Bridge state callback (connection popup)
-    rs520::bridge_on_state_change(bridge_state_cb, nullptr);
-
-    esp_err_t wifi_ret = rs520::wifi_connect();
-    if (wifi_ret == ESP_ERR_NVS_NOT_FOUND || wifi_ret == ESP_FAIL)
-    {
-        ESP_LOGW(kTag, "No WiFi credentials or connection failed — starting provisioning");
-        ESP_ERROR_CHECK(rs520::provision_start());
-        lvgl_port_lock(0);
-        rs520::wifi_status_ui_show_provision(rs520::provision_ssid());
-        lvgl_port_unlock();
-    }
-
-    // Start bridge mDNS discovery + WebSocket client
-    // Works even before WiFi is fully connected — discovery task
-    // waits for mDNS results which require network connectivity.
-    ESP_ERROR_CHECK(rs520::bridge_discovery_init());
 
     ESP_LOGI(kTag, "Boot complete");
 }

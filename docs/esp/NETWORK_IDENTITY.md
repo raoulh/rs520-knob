@@ -81,11 +81,13 @@ auto get_hostname() -> const char* {
 
 ### How It Works
 
-1. `bridge_discovery_init()` spawns a FreeRTOS task (4096 stack, prio 4)
+1. `bridge_discovery_init()` spawns a FreeRTOS task (8192 stack, prio 4)
 2. Task calls `mdns_init()` + `mdns_hostname_set("rs520-knob-XXYYZZ")` (MAC-based)
-3. Queries `mdns_query_ptr("_rs520bridge", "_tcp", 5000, ...)` in a loop
-4. On match → extracts IP + port from result → connects WebSocket `ws://host:port/ws`
-5. On disconnect → retries discovery with 3s backoff
+3. **Fast path**: Loads cached bridge IP:port from NVS (`bridge` namespace). If found, attempts WebSocket connect with 2s timeout. On success, skips mDNS entirely.
+4. **Fallback**: Queries `mdns_query_ptr("_rs520bridge", "_tcp", 3000, ...)` in a loop
+5. On mDNS match → extracts IP + port → connects WebSocket `ws://host:port/ws` → saves to NVS for next boot
+6. On disconnect → retries discovery with 3s backoff
+7. If cached address fails → clears NVS cache, falls through to mDNS
 
 ### Bridge Side (Go)
 
@@ -100,9 +102,19 @@ The bridge advertises via `hashicorp/mdns`:
 
 State changes fire a callback (registered via `bridge_on_state_change()`) which drives the connection UI overlay.
 
+### NVS Bridge Cache
+
+**Implemented.** After successful mDNS discovery, bridge IP and port are cached in NVS:
+
+| Namespace | Key | Type | Purpose |
+|-----------|-----|------|---------|
+| `bridge` | `host` | string | Bridge IPv4 address |
+| `bridge` | `port` | uint16 | Bridge WebSocket port |
+
+On boot, cached address is tried first with a 2s timeout. This eliminates the ~5s mDNS query on most boots. Cache is cleared if the WS connect fails (bridge moved/down).
+
 ### Fallback Options (Not Yet Implemented)
 
-- **Static:** bridge IP/port stored in NVS
 - **SoftAP provisioning:** user configures bridge address during WiFi setup
 
 ## Hostname Sanitization

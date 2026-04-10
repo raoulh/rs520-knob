@@ -241,11 +241,29 @@ ws://{bridge_ip}:8080/ws
 
 The ESP32-S3 connects to WiFi as a station (STA). Credentials are stored in NVS.
 
-### Boot Connection Sequence
+### Boot Sequence (Parallel)
+
+`app_main()` runs WiFi and hardware init in parallel for fast startup:
+
+1. NVS init → `wifi_init()` (creates netif, event loop, driver — does NOT start WiFi yet)
+2. Spawns `net_task` (background) which runs `wifi_connect()` + `bridge_discovery_init()`
+3. Main thread continues: LVGL, I2C, display, touch, UI widgets, backlight fade-in
+4. `net_task` waits for `kBitUiReady` event before touching LVGL widgets (provisioning path)
+5. WiFi association (~1.2s) overlaps with display init (~400ms)
+
+Measured boot-to-artwork: **3.6s** (vs 10.6s sequential).
+
+### WiFi Connection Sequence
 
 1. **Fast connect** — If stored BSSID + channel exist in NVS, connect directly (skips scan, ~500ms)
 2. **Scan fallback** — If fast connect fails, full all-channel scan sorted by RSSI, pick strongest
 3. **Provisioning** — If no creds stored or 3 failures, start SoftAP captive portal
+
+### Bridge Connection Sequence
+
+1. **NVS cache** — Try cached bridge IP:port (2s WS connect timeout). Skips mDNS.
+2. **mDNS fallback** — Query `_rs520bridge._tcp` (3s timeout). Save result to NVS on success.
+3. **Retry** — On disconnect, retry with 3s backoff. Cache cleared if stale.
 
 ### WiFi Provisioning (SoftAP)
 

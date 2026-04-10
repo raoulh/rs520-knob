@@ -51,6 +51,10 @@ esp_err_t wifi_clear_credentials();
 /// Store WiFi credentials to NVS (called by provisioning).
 esp_err_t wifi_store_credentials(const char* ssid, const char* password);
 
+/// Block until WiFi is connected or timeout.
+/// Returns true if connected, false on timeout.
+bool wifi_wait_connected(int timeout_ms);
+
 }  // namespace rs520
 
 #endif // RS520_WIFI_MANAGER_H

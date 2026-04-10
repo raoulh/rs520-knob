@@ -446,4 +446,16 @@ esp_err_t wifi_store_credentials(const char* ssid, const char* password)
     return ESP_OK;
 }
 
+bool wifi_wait_connected(int timeout_ms)
+{
+    if (s_state == WifiState::kConnected) return true;
+    if (!s_event_group) return false;
+
+    EventBits_t bits = xEventGroupWaitBits(s_event_group,
+                                            kBitConnected,
+                                            pdFALSE, pdFALSE,
+                                            pdMS_TO_TICKS(timeout_ms));
+    return (bits & kBitConnected) != 0;
+}
+
 }  // namespace rs520

@@ -4,6 +4,9 @@
 #include "encoder.h"
 #include "haptic.h"
 #include "progress_ui.h"
+#include "wifi_manager.h"
+#include "wifi_provision.h"
+#include "wifi_status_ui.h"
 
 #include "i2c_bsp.h"
 #include "lcd_touch_bsp.h"
@@ -97,10 +100,11 @@ extern "C" void app_main()
     // Display (SH8601 QSPI + registered with esp_lvgl_port)
     ESP_ERROR_CHECK(rs520::display_init());
 
-    // Touch input + Progress bar UI
+    // Touch input + Progress bar UI + WiFi status icon
     lvgl_port_lock(0);
     ESP_ERROR_CHECK(rs520::touch_init());
     rs520::progress_ui_create();
+    rs520::wifi_status_ui_create();
     lvgl_port_unlock();
 
     // Smooth backlight fade-in (screen content already rendered)
@@ -110,5 +114,18 @@ extern "C" void app_main()
     xTaskCreate(encoder_task, "encoder", kEncoderTaskStack, nullptr,
                 kEncoderTaskPrio, nullptr);
 
-    ESP_LOGI(kTag, "Boot complete — progress bar + encoder active");
+    // WiFi: init driver, then connect or provision
+    ESP_ERROR_CHECK(rs520::wifi_init());
+
+    esp_err_t wifi_ret = rs520::wifi_connect();
+    if (wifi_ret == ESP_ERR_NVS_NOT_FOUND || wifi_ret == ESP_FAIL)
+    {
+        ESP_LOGW(kTag, "No WiFi credentials or connection failed — starting provisioning");
+        lvgl_port_lock(0);
+        rs520::wifi_status_ui_show_provision("RS520-Knob-XXXXXX");
+        lvgl_port_unlock();
+        ESP_ERROR_CHECK(rs520::provision_start());
+    }
+
+    ESP_LOGI(kTag, "Boot complete");
 }

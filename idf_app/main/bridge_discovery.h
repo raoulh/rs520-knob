@@ -37,6 +37,12 @@ void bridge_on_state_change(BridgeStateCallback cb, void* ctx);
 /// Non-blocking: stores pending value, coalesces rapid calls.
 void bridge_send_volume(int volume);
 
+/// Get bridge IP address (empty string if not yet discovered).
+const char* bridge_host();
+
+/// Get bridge port (0 if not yet discovered).
+uint16_t bridge_port();
+
 }  // namespace rs520
 
 #endif // RS520_BRIDGE_DISCOVERY_H

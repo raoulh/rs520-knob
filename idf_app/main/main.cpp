@@ -12,6 +12,8 @@
 #include "wifi_status_ui.h"
 #include "bridge_discovery.h"
 #include "connection_ui.h"
+#include "artwork_ui.h"
+#include "metadata_ui.h"
 
 #include "i2c_bsp.h"
 #include "lcd_touch_bsp.h"
@@ -177,7 +179,9 @@ extern "C" void app_main()
     // Touch input + Progress bar UI + Status bar + WiFi/Battery icons + Connection popup
     lvgl_port_lock(0);
     ESP_ERROR_CHECK(rs520::touch_init());
+    rs520::artwork_ui_create();
     rs520::progress_ui_create();
+    rs520::metadata_ui_create();
     rs520::status_bar_create();
     rs520::wifi_status_ui_create();
     rs520::battery_ui_create();

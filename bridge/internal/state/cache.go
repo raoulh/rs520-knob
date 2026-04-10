@@ -22,6 +22,9 @@ type State struct {
 	AlbumArtID string `json:"albumArtId"`
 	PowerOn    bool   `json:"powerOn"`
 	Source     string `json:"source"`
+	Position   int    `json:"position"`
+	Duration   int    `json:"duration"`
+	TrackInfo  string `json:"trackInfo"`
 }
 
 // Cache provides thread-safe access to the device state.
@@ -79,6 +82,13 @@ func (c *Cache) Update(new State) []Change {
 	if old.Source != new.Source {
 		changes = append(changes, Change{"source", old.Source, new.Source})
 	}
+	if old.TrackInfo != new.TrackInfo {
+		changes = append(changes, Change{"trackInfo", old.TrackInfo, new.TrackInfo})
+	}
+	if old.Duration != new.Duration {
+		changes = append(changes, Change{"duration", old.Duration, new.Duration})
+	}
+	// Position updates silently — use dedicated position event instead
 
 	c.state = new
 	return changes

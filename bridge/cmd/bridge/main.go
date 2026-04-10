@@ -217,12 +217,15 @@ func pollDeviceState(client *rs520.Client, cache *state.Cache, hub *ws.Hub, brid
 		AlbumArtID: currentState.Data.AlbumArtID,
 		Source:     controlInfo.Source,
 		PowerOn:    true,
+		Position:   int(currentState.Data.CurrentPosition),
+		Duration:   int(currentState.Data.Duration),
+		TrackInfo:  currentState.Data.TrackInfo,
 	}
 
 	changes := cache.Update(newState)
 	if len(changes) > 0 {
 		s := cache.Snapshot()
-		hub.Broadcast(ws.NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.PowerOn))
+		hub.Broadcast(ws.NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.TrackInfo, s.Position, s.Duration, s.PowerOn))
 
 		// Check if artwork changed
 		for _, ch := range changes {
@@ -231,6 +234,10 @@ func pollDeviceState(client *rs520.Client, cache *state.Cache, hub *ws.Hub, brid
 			}
 		}
 	}
+
+	// Always send position update (changes every poll)
+	s := cache.Snapshot()
+	hub.Broadcast(ws.NewPositionEvent(s.Position, s.Duration))
 }
 
 func getOutboundIP() string {

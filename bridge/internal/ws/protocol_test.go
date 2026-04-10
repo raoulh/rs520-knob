@@ -93,7 +93,7 @@ func TestVolumeFromCommandNegative(t *testing.T) {
 }
 
 func TestNewStateEvent(t *testing.T) {
-	evt := NewStateEvent(42, true, true, "Song", "Artist", "Album", "tidal", true)
+	evt := NewStateEvent(42, true, true, "Song", "Artist", "Album", "tidal", "iPhone", 120000, 240000, true)
 	if evt.Evt != EvtState {
 		t.Errorf("expected evt %q, got %q", EvtState, evt.Evt)
 	}
@@ -105,6 +105,15 @@ func TestNewStateEvent(t *testing.T) {
 	}
 	if evt.Title != "Song" {
 		t.Errorf("expected title 'Song', got %q", evt.Title)
+	}
+	if *evt.Position != 120000 {
+		t.Errorf("expected position 120000, got %d", *evt.Position)
+	}
+	if *evt.Duration != 240000 {
+		t.Errorf("expected duration 240000, got %d", *evt.Duration)
+	}
+	if evt.TrackInfo != "iPhone" {
+		t.Errorf("expected trackInfo 'iPhone', got %q", evt.TrackInfo)
 	}
 }
 
@@ -143,7 +152,7 @@ func TestNewErrorEvent(t *testing.T) {
 }
 
 func TestStateEventJSON(t *testing.T) {
-	evt := NewStateEvent(25, false, true, "Song", "Artist", "Album", "radio", true)
+	evt := NewStateEvent(25, false, true, "Song", "Artist", "Album", "radio", "", 0, 0, true)
 	data, err := json.Marshal(evt)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

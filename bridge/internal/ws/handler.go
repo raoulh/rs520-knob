@@ -54,7 +54,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Send initial state snapshot
 	s := h.cache.Snapshot()
-	evt := NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.PowerOn)
+	evt := NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.TrackInfo, s.Position, s.Duration, s.PowerOn)
 	if data, err := json.Marshal(evt); err == nil {
 		client.send <- data
 	}
@@ -151,7 +151,7 @@ func (h *Handler) handleCommand(cmd *Command) {
 		changes := h.cache.SetMute(muteResp.Mute)
 		if len(changes) > 0 {
 			s := h.cache.Snapshot()
-			h.hub.Broadcast(NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.PowerOn))
+			h.hub.Broadcast(NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.TrackInfo, s.Position, s.Duration, s.PowerOn))
 		}
 
 	case CmdPower:

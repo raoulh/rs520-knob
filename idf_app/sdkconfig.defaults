@@ -49,6 +49,7 @@ CONFIG_LV_LOG_LEVEL_WARN=y
 
 # Built-in fonts
 CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_22=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
 
 # Disable unused LVGL features to save flash

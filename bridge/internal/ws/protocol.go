@@ -13,17 +13,20 @@ type Command struct {
 
 // Event is a message from the bridge to the knob.
 type Event struct {
-	Evt     string `json:"evt"`
-	Volume  *int   `json:"volume,omitempty"`
-	Mute    *bool  `json:"mute,omitempty"`
-	Playing *bool  `json:"playing,omitempty"`
-	Title   string `json:"title,omitempty"`
-	Artist  string `json:"artist,omitempty"`
-	Album   string `json:"album,omitempty"`
-	Source  string `json:"source,omitempty"`
-	PowerOn *bool  `json:"powerOn,omitempty"`
-	Device  string `json:"device,omitempty"`
-	URL     string `json:"url,omitempty"`
+	Evt       string `json:"evt"`
+	Volume    *int   `json:"volume,omitempty"`
+	Mute      *bool  `json:"mute,omitempty"`
+	Playing   *bool  `json:"playing,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Artist    string `json:"artist,omitempty"`
+	Album     string `json:"album,omitempty"`
+	Source    string `json:"source,omitempty"`
+	PowerOn   *bool  `json:"powerOn,omitempty"`
+	Device    string `json:"device,omitempty"`
+	URL       string `json:"url,omitempty"`
+	Position  *int   `json:"position,omitempty"`
+	Duration  *int   `json:"duration,omitempty"`
+	TrackInfo string `json:"trackInfo,omitempty"`
 }
 
 // Valid command names.
@@ -43,6 +46,7 @@ const (
 	EvtConnected = "connected"
 	EvtArtwork   = "artwork"
 	EvtError     = "error"
+	EvtPosition  = "position"
 )
 
 // ParseCommand parses and validates a JSON command.
@@ -77,17 +81,29 @@ func VolumeFromCommand(cmd *Command) (int, error) {
 }
 
 // NewStateEvent creates a full state event for sending to the knob.
-func NewStateEvent(volume int, mute, playing bool, title, artist, album, source string, powerOn bool) *Event {
+func NewStateEvent(volume int, mute, playing bool, title, artist, album, source, trackInfo string, position, duration int, powerOn bool) *Event {
 	return &Event{
-		Evt:     EvtState,
-		Volume:  &volume,
-		Mute:    &mute,
-		Playing: &playing,
-		Title:   title,
-		Artist:  artist,
-		Album:   album,
-		Source:   source,
-		PowerOn: &powerOn,
+		Evt:       EvtState,
+		Volume:    &volume,
+		Mute:      &mute,
+		Playing:   &playing,
+		Title:     title,
+		Artist:    artist,
+		Album:     album,
+		Source:    source,
+		PowerOn:   &powerOn,
+		Position:  &position,
+		Duration:  &duration,
+		TrackInfo: trackInfo,
+	}
+}
+
+// NewPositionEvent creates a position update event.
+func NewPositionEvent(position, duration int) *Event {
+	return &Event{
+		Evt:      EvtPosition,
+		Position: &position,
+		Duration: &duration,
 	}
 }
 

@@ -105,6 +105,7 @@ type CurrentStateData struct {
 	Duration          FlexInt  `json:"duration"`
 	CurrentPosition   FlexInt  `json:"currentPosition"`
 	SourceName        string   `json:"sourceName"`
+	TrackInfo         string   `json:"trackInfo"`
 }
 
 // ControlInfoResponse wraps GET /get_control_info response.

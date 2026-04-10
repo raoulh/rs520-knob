@@ -83,7 +83,7 @@ func (l *Listener) handleNotification(w http.ResponseWriter, r *http.Request) {
 		changes := l.cache.SetMute(mute)
 		if len(changes) > 0 {
 			s := l.cache.Snapshot()
-			l.hub.Broadcast(ws.NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.PowerOn))
+			l.hub.Broadcast(ws.NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.TrackInfo, s.Position, s.Duration, s.PowerOn))
 		}
 
 	case "music_start":

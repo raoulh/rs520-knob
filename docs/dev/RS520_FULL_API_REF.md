@@ -114,37 +114,136 @@ Unless otherwise noted, all requests are **POST** with `Content-Type: applicatio
 #### `POST /device_name`
 Ping the device / retrieve its name. No body required.
 ```json
-// Response
-{ "data": { /* device info: name, model, etc. */ } }
+// Response (observed)
+{
+  "data": {
+    "dbFileSize": 0,
+    "deviceGateway": "192.168.30.222",
+    "deviceID": "FF:AB:DE:0F:27:98",
+    "deviceIP": "192.168.30.135",
+    "deviceName": "RoseSalon",
+    "deviceNetmask": "255.255.255.0",
+    "deviceType": "RS520",
+    "deviceVersion": "5.9.09",
+    "isDbScanning": false,
+    "isDev": false,
+    "isSyncMode": false,
+    "musicPlaytype": 0,
+    "stableState": "Stable"
+  },
+  "code": "G0000",
+  "status": { "errorCd": "", "errorMsg": "", "outs": "OK" },
+  "version": "1.0.9"
+}
 ```
 
 #### `POST /device_connected`
-Signal app connection. Returns the device menu.
+Signal app connection. Returns the device menu and a `deviceRoseToken` for authentication.
 ```json
 // Request
 { "connectIP": "192.168.30.68" }
-// Response
-{ "menuArr": [ /* device menu structure */ ] }
+// Response (observed)
+{
+  "data": {
+    "dbFileSize": 172032,
+    "deviceID": "FF:AB:DE:0F:27:98",
+    "deviceIP": "192.168.30.135",
+    "deviceName": "RoseSalon",
+    "deviceRoseToken": "ROSE0D1746ABCD",
+    "deviceType": "RS520",
+    "deviceVersion": "5.9.09",
+    "isDbScanning": false,
+    "isDev": false,
+    "isSyncMode": true,
+    "musicPlaytype": 17,
+    "regionCode": "FR"
+  },
+  "menuArr": [
+    { "img": 0, "isSelected": false, "menu": "ROSE_HOME", "status": 1 },
+    { "img": 0, "isSelected": false, "menu": "MUSIC", "status": 1 },
+    { "img": 0, "isSelected": false, "menu": "VIDEO", "status": 1 },
+    { "img": 0, "isSelected": false, "menu": "CD_PLAY", "status": 1 },
+    { "img": 0, "isSelected": false, "menu": "ROSE_RADIO", "packageNm": "com.citech.roseradio", "status": 1 },
+    { "img": 0, "isSelected": false, "menu": "TIDAL", "packageNm": "com.citech.rosetidal", "status": 1 },
+    { "img": 0, "isSelected": false, "menu": "ROSETUBE", "packageNm": "com.citech.rosetube", "status": 1 },
+    { "img": 0, "isSelected": false, "menu": "SETTING", "status": 1 }
+  ],
+  "code": "G0000",
+  "status": { "errorCd": "", "errorMsg": "", "outs": "OK" },
+  "version": "1.0.9"
+}
 ```
 
 #### `POST /device_get_info`
 Retrieve detailed device information.
+**Note:** Returns an empty body in practice.
 
 #### `POST /get_current_state`
 Full current playback state (title, artist, position, source, etc.).
+
+All responses include a common structure: `{"code": "G0000"|"SLEEP", "status": {"errorCd": "", "errorMsg": "", "outs": "OK"}, "version": "1.0.9"}`
+
+**When device is in sleep mode**, all endpoints return:
 ```json
-// Response
+{ "code": "SLEEP", "status": { "errorCd": "", "errorMsg": "", "outs": "OK" }, "version": "1.0.9" }
+```
+
+**When device is awake (observed):**
+```json
 {
   "data": {
-    "titleName": "...",
-    "subAppCurrentData": "{ ... }",  // stringified JSON
-    "tempArr": ["key:value", ...]
-  }
+    "albumName": "GONE FISHIN'",
+    "artistName": "GLU, Phantogram",
+    "buf": 0,
+    "buffer": "0",
+    "curPosition": "197000",
+    "duration": "236000",
+    "favCnt": 0,
+    "isFavorite": false,
+    "isFile": false,
+    "isHdmiOn": false,
+    "isPlaying": true,
+    "isServer": false,
+    "path": "",
+    "playState": "",
+    "playType": "AIRPLAY",
+    "repeatMode": 0,
+    "shuffleMode": 0,
+    "subAppCurrentData": "",
+    "tempArr": [],
+    "thumbnail": ["/storage/emulated/0/Pictures/airplay1.jpg"],
+    "titleName": "GONE FISHIN'",
+    "trackInfo": "iPhone de Laetitia",
+    "ui_state": 0,
+    "volume": 0
+  },
+  "code": "G0000",
+  "status": { "errorCd": "", "errorMsg": "", "outs": "OK" },
+  "version": "1.0.9"
 }
 ```
 
+**Note:** `curPosition` and `duration` are strings (milliseconds). `volume` in this response is always 0 — use `GET /get_control_info` for the real volume.
+
 #### `GET /get_control_info`
 Control information (playback state, volume, active source, etc.).
+```json
+// Response (observed)
+{
+  "airplayInfo": true,
+  "displayInfo": "Off",
+  "dlnaInfo": true,
+  "isUsbEnable": false,
+  "qobuzConnectInfo": true,
+  "spotifyInfo": true,
+  "volumeNotSupported": 0,
+  "volumeValue": 10,
+  "code": "G0000",
+  "status": { "errorCd": "", "errorMsg": "", "outs": "OK" },
+  "version": "1.0.9"
+}
+```
+**This is the only reliable source for reading the current volume** (`volumeValue` field, integer).
 
 #### `POST /check_server`
 Check that the device server is active.
@@ -216,18 +315,20 @@ Queue-relative playback state.
 #### `POST /volume`
 Set the volume.
 ```json
-// Request (exact range undocumented, likely 0-100)
+// Request
 { "volume": 20 }
-// Response
-{ "volumeValue": 20 }
 ```
+**Note:** This endpoint returns an **empty body** on success. To read the current volume, use `GET /get_control_info` instead. When the device is in sleep mode, this endpoint also returns an empty body and has no effect.
 
 #### `POST /mute.state.get`
 Retrieve mute state.
 ```json
-// Response
-{ "mute": true }  // or false
+// Response (observed)
+{ "mute": 0, "code": "G0000", "status": { "errorCd": "", "errorMsg": "", "outs": "OK" }, "version": "1.0.9" }
+// After mute toggle:
+{ "mute": 1, "code": "G0000", "status": { "errorCd": "", "errorMsg": "", "outs": "OK" }, "version": "1.0.9" }
 ```
+**Note:** `mute` is an integer (0 = not muted, 1 = muted), not a boolean.
 
 ---
 
@@ -461,6 +562,21 @@ POST /sympony_music_show_view
 
 #### `POST /in.out.mode.get`
 Retrieve current input/output configuration.
+```json
+// Response (observed)
+{
+  "clockInfo": -1,
+  "clockMode": 0,
+  "funcMode": 0,
+  "internalMode": "0,0,1,1",
+  "isDacReset": false,
+  "javsMode": 0,
+  "outputMode": 4,
+  "xmosInfo": -1,
+  "version": "1.0.9"
+}
+```
+**Note:** This endpoint does not include `code` or `status` fields in its response.
 
 #### `POST /input.mode.set`
 Change input mode.
@@ -483,6 +599,22 @@ Retrieve SFP DAC info.
 
 #### `POST /signal.path.get`
 Retrieve the full audio signal path.
+```json
+// Response (observed)
+{
+  "item": {
+    "model": "High Performance Network Streamer",
+    "output": "Analog(AMP + PREAMP)",
+    "outputMode": 4,
+    "playType": "AIRPLAY",
+    "source": "Tim's iPad",
+    "tempArr": []
+  },
+  "code": "G0000",
+  "status": { "errorCd": "", "errorMsg": "", "outs": "OK" },
+  "version": "1.0.9"
+}
+```
 
 #### `POST /xlr.hp.get`
 XLR / headphone output info.
@@ -575,8 +707,8 @@ Modify menu configuration.
 #### `GET /sleep.time.get`
 Retrieve sleep timer.
 ```json
-// Response
-{ "timer": 0 }
+// Response (observed)
+{ "timer": 0, "code": "G0000", "status": { "errorCd": "", "errorMsg": "", "outs": "OK" }, "version": "1.0.9" }
 ```
 
 ---
@@ -860,13 +992,47 @@ app.listen(9284, '0.0.0.0', () => {
 
 ---
 
+## Common Response Pattern
+
+All API responses (when the device is awake) include:
+```json
+{
+  "code": "G0000",
+  "status": { "errorCd": "", "errorMsg": "", "outs": "OK" },
+  "version": "1.0.9"
+}
+```
+
+| `code` value | Meaning |
+|-------------|---------|
+| `G0000` | Device is awake and operational |
+| `SLEEP` | Device is in sleep/standby mode |
+
+### Device behavior in sleep mode
+
+When the device is in sleep mode, most endpoints return only the common fields:
+```json
+{ "code": "SLEEP", "status": { "errorCd": "", "errorMsg": "", "outs": "OK" }, "version": "1.0.9" }
+```
+
+Some endpoints (notably `POST /volume` and `POST /device_get_info`) return an **empty body** regardless of the device state.
+
+### Endpoints returning empty bodies
+
+| Endpoint | Notes |
+|----------|-------|
+| `POST /volume` | Set volume works (side effect), but response body is always empty |
+| `POST /device_get_info` | Always returns empty body |
+
+---
+
 ## Device Information
 
 | Property | Value |
 |----------|-------|
 | Configured name | RoseSalon |
 | Model | RS520 |
-| MAC | d0:eb:9e:0d:17:46 |
+| MAC | FF:AB:DE:0F:27:98 |
 | mDNS hostname | Android-2.local / ROSE-0D1746.local |
 | Base OS | Android (okhttp 3.12.0 + Android mDNS) |
 | DAC firmware | 1.0.9 |

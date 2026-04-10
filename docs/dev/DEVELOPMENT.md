@@ -56,6 +56,24 @@ rm sdkconfig
 idf.py build
 ```
 
+## ESP-IDF v6.0: cJSON Is External
+
+Starting from ESP-IDF v6.0, `cJSON` is **no longer bundled** — it must be added as a managed component:
+
+```yaml
+# idf_component.yml
+dependencies:
+  espressif/cjson:
+    version: "^1.7.18"
+```
+
+And added to `CMakeLists.txt`:
+```cmake
+PRIV_REQUIRES ... espressif__cjson
+```
+
+**Do NOT hand-roll JSON parsing** — always use cJSON for correctness and maintainability.
+
 ## Clean Build
 
 ```bash
@@ -69,6 +87,9 @@ rs520-knob/
 ├── idf_app/              # ESP-IDF project root
 │   ├── main/             # Application source (C++20)
 │   │   ├── main.cpp          # Boot sequence, task creation
+│   │   ├── bridge_discovery.* # mDNS browse + WS client + volume throttle
+│   │   ├── connection_ui.*   # LVGL modal popup (bridge connect state)
+│   │   ├── progress_ui.*     # Dual-arc volume UI (ghost + confirmed + popup)
 │   │   ├── wifi_manager.*    # WiFi STA, NVS creds, roaming
 │   │   ├── wifi_provision.*  # SoftAP captive portal provisioning
 │   │   ├── wifi_status_ui.*  # LVGL WiFi status icon
@@ -77,7 +98,9 @@ rs520-knob/
 │   │   ├── encoder.*         # Rotary encoder polling
 │   │   ├── haptic.*          # DRV2605 haptic driver
 │   │   ├── backlight.*       # PWM backlight control
-│   │   └── progress_ui.*     # Arc progress bar UI
+│   │   ├── battery.*         # ADC battery monitor
+│   │   ├── battery_ui.*      # Battery status icon + warning overlay
+│   │   └── status_bar.*      # Bottom status bar container
 │   ├── components/       # Custom components
 │   │   ├── i2c_bsp/          # I2C bus init
 │   │   ├── lcd_touch_bsp/    # Touch controller BSP
@@ -85,7 +108,7 @@ rs520-knob/
 │   ├── sdkconfig.defaults
 │   └── partitions.csv
 ├── bridge/               # Go bridge (WebSocket ↔ RS520 HTTPS)
-│   ├── cmd/bridge/       # Entry point, config, graceful shutdown
+│   ├── cmd/bridge/       # Entry point, config, mDNS advert, graceful shutdown
 │   ├── internal/
 │   │   ├── rs520/        # RS520 HTTPS client (:9283)
 │   │   ├── ws/           # WebSocket server (hub, handler, protocol)
@@ -129,7 +152,20 @@ cd bridge
 docker compose up --build
 ```
 
-Requires `network_mode: host` so the RS520 can reach the notification listener on `:9284`.
+Requires `network_mode: host` for two reasons:
+1. RS520 can reach the notification listener on `:9284`
+2. mDNS multicast works on the LAN (bridge advertises `_rs520bridge._tcp`)
+
+### mDNS Service Advertisement
+
+The bridge advertises itself via mDNS on startup:
+- **Service**: `_rs520bridge._tcp`
+- **Port**: WS_PORT (default 8080)
+- **TXT records**: `version=0.1.0`, `rs520=<RS520_HOST>`
+
+The ESP32 knob discovers the bridge automatically via mDNS browse — no manual IP configuration needed.
+
+Verify with: `avahi-browse -r _rs520bridge._tcp`
 
 ### Config (env vars)
 

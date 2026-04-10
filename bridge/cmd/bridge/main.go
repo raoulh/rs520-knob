@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/mdns"
 	"github.com/raoulh/rs520-knob/bridge/internal/artwork"
 	"github.com/raoulh/rs520-knob/bridge/internal/notify"
 	"github.com/raoulh/rs520-knob/bridge/internal/rs520"
@@ -102,6 +103,25 @@ func main() {
 		}
 	}()
 
+	// mDNS service advertisement
+	mdnsService, err := mdns.NewMDNSService(
+		"RS520 Bridge",       // instance name
+		"_rs520bridge._tcp",  // service type
+		"",                   // domain (default .local)
+		"",                   // host (auto)
+		cfg.WSPort,           // port
+		nil,                  // IPs (auto)
+		[]string{"version=0.1.0", fmt.Sprintf("rs520=%s", cfg.RS520Host)}, // TXT
+	)
+	if err != nil {
+		log.Fatalf("[mdns] service error: %v", err)
+	}
+	mdnsServer, err := mdns.NewServer(&mdns.Config{Zone: mdnsService})
+	if err != nil {
+		log.Fatalf("[mdns] server error: %v", err)
+	}
+	log.Printf("[mdns] advertising _rs520bridge._tcp on port %d", cfg.WSPort)
+
 	// Graceful shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -109,6 +129,7 @@ func main() {
 	log.Printf("[bridge] received %s, shutting down...", sig)
 
 	ticker.Stop()
+	mdnsServer.Shutdown()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

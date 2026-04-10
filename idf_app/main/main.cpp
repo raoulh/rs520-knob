@@ -10,6 +10,8 @@
 #include "wifi_manager.h"
 #include "wifi_provision.h"
 #include "wifi_status_ui.h"
+#include "bridge_discovery.h"
+#include "connection_ui.h"
 
 #include "i2c_bsp.h"
 #include "lcd_touch_bsp.h"
@@ -35,7 +37,7 @@ constexpr uint8_t kBrightnessNormal   = 255;
 constexpr uint8_t kBrightnessLow      = 128;  // 50%
 constexpr uint8_t kBrightnessCritical = 64;   // 25%
 
-/// Task: reads encoder queue, updates progress UI + fires haptic click.
+/// Task: reads encoder queue, updates ghost arc + sends volume to bridge.
 /// Runs forever. Blocks on queue (no busy-wait).
 void encoder_task(void* /*arg*/)
 {
@@ -48,8 +50,8 @@ void encoder_task(void* /*arg*/)
         {
             int delta = static_cast<int>(dir);  // +1 or -1
 
-            // Get current value to check bounds before haptic
-            int prev = rs520::progress_ui_get();
+            // Get current target to check bounds before haptic
+            int prev = rs520::progress_ui_get_target();
             int next = prev + delta;
 
             // Only act if within bounds (no haptic at limits)
@@ -58,15 +60,47 @@ void encoder_task(void* /*arg*/)
                 continue;
             }
 
-            // Update UI (needs LVGL lock)
+            // Update ghost arc + show popup (needs LVGL lock)
             lvgl_port_lock(0);
-            rs520::progress_ui_adjust(delta);
+            int actual = rs520::progress_ui_adjust(delta);
             lvgl_port_unlock();
 
             // Haptic click for feedback
             rs520::haptic_click();
+
+            // Send to bridge (throttled, non-blocking)
+            rs520::bridge_send_volume(actual);
         }
     }
+}
+
+/// Bridge connection state callback — drives connection UI popup.
+/// Called from WS event task — uses lv_async_call for thread safety.
+struct BridgeUiMsg { rs520::BridgeState state; };
+
+void bridge_state_cb(rs520::BridgeState state, void* /*ctx*/)
+{
+    // Allocate on heap for lv_async_call (freed in callback)
+    auto* msg = new BridgeUiMsg{state};
+    lv_async_call([](void* d) {
+        auto* m = static_cast<BridgeUiMsg*>(d);
+        switch (m->state)
+        {
+        case rs520::BridgeState::kSearching:
+            rs520::connection_ui_show("Searching for\nRS520 Bridge...");
+            break;
+        case rs520::BridgeState::kConnecting:
+            rs520::connection_ui_show("Connecting to\nbridge...");
+            break;
+        case rs520::BridgeState::kConnected:
+            rs520::connection_ui_hide();
+            break;
+        case rs520::BridgeState::kDisconnected:
+            rs520::connection_ui_show("Bridge disconnected\nReconnecting...");
+            break;
+        }
+        delete m;
+    }, msg);
 }
 
 /// Battery state change callback — called from battery monitor task.
@@ -140,13 +174,14 @@ extern "C" void app_main()
     // Display (SH8601 QSPI + registered with esp_lvgl_port)
     ESP_ERROR_CHECK(rs520::display_init());
 
-    // Touch input + Progress bar UI + Status bar + WiFi/Battery icons
+    // Touch input + Progress bar UI + Status bar + WiFi/Battery icons + Connection popup
     lvgl_port_lock(0);
     ESP_ERROR_CHECK(rs520::touch_init());
     rs520::progress_ui_create();
     rs520::status_bar_create();
     rs520::wifi_status_ui_create();
     rs520::battery_ui_create();
+    rs520::connection_ui_create();
     lvgl_port_unlock();
 
     // Smooth backlight fade-in (screen content already rendered)
@@ -163,6 +198,9 @@ extern "C" void app_main()
     // WiFi: init driver, then connect or provision
     ESP_ERROR_CHECK(rs520::wifi_init());
 
+    // Bridge state callback (connection popup)
+    rs520::bridge_on_state_change(bridge_state_cb, nullptr);
+
     esp_err_t wifi_ret = rs520::wifi_connect();
     if (wifi_ret == ESP_ERR_NVS_NOT_FOUND || wifi_ret == ESP_FAIL)
     {
@@ -172,6 +210,11 @@ extern "C" void app_main()
         lvgl_port_unlock();
         ESP_ERROR_CHECK(rs520::provision_start());
     }
+
+    // Start bridge mDNS discovery + WebSocket client
+    // Works even before WiFi is fully connected — discovery task
+    // waits for mDNS results which require network connectivity.
+    ESP_ERROR_CHECK(rs520::bridge_discovery_init());
 
     ESP_LOGI(kTag, "Boot complete");
 }

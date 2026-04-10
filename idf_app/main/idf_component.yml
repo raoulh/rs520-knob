@@ -10,3 +10,7 @@ dependencies:
     public: true
   espressif/mdns:
     version: "*"
+  espressif/esp_websocket_client:
+    version: "^1.6.1"
+  espressif/cjson:
+    version: "^1.7.18"

@@ -73,9 +73,9 @@ func TestSetVolume(t *testing.T) {
 		body := readBody(t, r)
 		var req VolumeRequest
 		json.Unmarshal(body, &req)
-		gotVol = req.Volume
+		gotVol = req.VolumeValue
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(VolumeResponse{VolumeValue: req.Volume})
+		json.NewEncoder(w).Encode(VolumeResponse{VolumeValue: req.VolumeValue})
 	}))
 	defer srv.Close()
 
@@ -238,7 +238,7 @@ func TestGetControlInfo(t *testing.T) {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"volume":42,"mute":false,"playState":1,"source":"tidal"}`))
+		w.Write([]byte(`{"volumeValue":42,"mute":false,"playState":1,"source":"tidal"}`))
 	}))
 	defer srv.Close()
 

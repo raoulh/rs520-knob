@@ -14,6 +14,7 @@
 #include "connection_ui.h"
 #include "artwork_ui.h"
 #include "metadata_ui.h"
+#include "transport_ui.h"
 
 #include "i2c_bsp.h"
 #include "lcd_touch_bsp.h"
@@ -26,6 +27,7 @@
 #include "freertos/task.h"
 #include "lvgl.h"
 
+#include <algorithm>
 #include <cstdint>
 
 namespace
@@ -46,8 +48,8 @@ constexpr uint8_t kBrightnessNormal   = 255;
 constexpr uint8_t kBrightnessLow      = 128;  // 50%
 constexpr uint8_t kBrightnessCritical = 64;   // 25%
 
-/// Task: reads encoder queue, updates ghost arc + sends volume to bridge.
-/// Runs forever. Blocks on queue (no busy-wait).
+/// Task: reads encoder queue, updates tick + sends volume to bridge.
+/// Drains all pending events per wake-up for low-latency haptic.
 void encoder_task(void* /*arg*/)
 {
     auto queue = rs520::encoder_queue();
@@ -55,31 +57,36 @@ void encoder_task(void* /*arg*/)
 
     for (;;)
     {
-        if (xQueueReceive(queue, &dir, portMAX_DELAY) == pdTRUE)
+        // Block until at least one event
+        if (xQueueReceive(queue, &dir, portMAX_DELAY) != pdTRUE)
+            continue;
+
+        int delta = static_cast<int>(dir);
+
+        // Drain remaining queued events — accumulate total delta
+        while (xQueueReceive(queue, &dir, 0) == pdTRUE)
         {
-            int delta = static_cast<int>(dir);  // +1 or -1
-
-            // Get current target to check bounds before haptic
-            int prev = rs520::progress_ui_get_target();
-            int next = prev + delta;
-
-            // Only act if within bounds (no haptic at limits)
-            if (next < 0 || next > 100)
-            {
-                continue;
-            }
-
-            // Update ghost arc + show popup (needs LVGL lock)
-            lvgl_port_lock(0);
-            int actual = rs520::progress_ui_adjust(delta);
-            lvgl_port_unlock();
-
-            // Haptic click for feedback
-            rs520::haptic_click();
-
-            // Send to bridge (throttled, non-blocking)
-            rs520::bridge_send_volume(actual);
+            delta += static_cast<int>(dir);
         }
+
+        if (delta == 0) continue;
+
+        // Clamp to bounds
+        int prev = rs520::progress_ui_get_target();
+        int next = std::clamp(prev + delta, 0, 100);
+        delta = next - prev;
+        if (delta == 0) continue;
+
+        // Single UI update for accumulated delta
+        lvgl_port_lock(0);
+        int actual = rs520::progress_ui_adjust(delta);
+        lvgl_port_unlock();
+
+        // Single haptic click for the batch
+        rs520::haptic_click();
+
+        // Send to bridge (throttled, non-blocking)
+        rs520::bridge_send_volume(actual);
     }
 }
 
@@ -234,6 +241,7 @@ extern "C" void app_main()
     rs520::artwork_ui_create();
     rs520::progress_ui_create();
     rs520::metadata_ui_create();
+    rs520::transport_ui_create();
     rs520::status_bar_create();
     rs520::wifi_status_ui_create();
     rs520::battery_ui_create();

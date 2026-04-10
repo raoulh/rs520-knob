@@ -306,13 +306,12 @@ static void handle_ws_data(const char* data, int len)
 
     if (strcmp(evt_str, "state") == 0)
     {
-        // Full state sync — set both arcs
+        // Full state sync — hard snap both values
         cJSON* vol_item = cJSON_GetObjectItem(root, "volume");
         if (vol_item && cJSON_IsNumber(vol_item))
         {
             int vol = vol_item->valueint;
             lvgl_port_lock(0);
-            rs520::progress_ui_set_confirmed(vol);
             rs520::progress_ui_set_target(vol);
             lvgl_port_unlock();
         }
@@ -653,6 +652,34 @@ void bridge_send_volume(int volume)
     // Restart one-shot timer. If already running, stop + restart.
     esp_timer_stop(s_throttle_timer);  // ignore error if not running
     esp_timer_start_once(s_throttle_timer, kThrottleUs);
+}
+
+static void send_simple_cmd(const char* cmd)
+{
+    if (!s_ws_client || !esp_websocket_client_is_connected(s_ws_client)) return;
+    char buf[48];
+    int len = snprintf(buf, sizeof(buf), R"({"cmd":"%s"})", cmd);
+    esp_websocket_client_send_text(s_ws_client, buf, len, pdMS_TO_TICKS(100));
+}
+
+void bridge_send_play_pause()
+{
+    send_simple_cmd("play_pause");
+}
+
+void bridge_send_next()
+{
+    send_simple_cmd("next");
+}
+
+void bridge_send_prev()
+{
+    send_simple_cmd("prev");
+}
+
+void bridge_send_shazam()
+{
+    send_simple_cmd("shazam");
 }
 
 const char* bridge_host()

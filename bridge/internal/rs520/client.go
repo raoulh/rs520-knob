@@ -225,6 +225,18 @@ func (c *Client) TogglePower() error {
 	return err
 }
 
+// ShazamSearch starts Shazam music recognition.
+func (c *Client) ShazamSearch() error {
+	_, err := c.post("/set.shazm.serarch", nil)
+	return err
+}
+
+// ShazamCancel cancels an in-progress Shazam search.
+func (c *Client) ShazamCancel() error {
+	_, err := c.post("/set.shazm.serarch_cancel", nil)
+	return err
+}
+
 // FetchAlbumArt downloads album artwork from the media library port.
 func (c *Client) FetchAlbumArt(artID string) ([]byte, string, error) {
 	url := c.mediaURL + "/v1/albumarts/" + artID

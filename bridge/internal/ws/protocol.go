@@ -38,6 +38,7 @@ const (
 	CmdPrev      = "prev"
 	CmdMute      = "mute"
 	CmdPower     = "power"
+	CmdShazam    = "shazam"
 )
 
 // Event type names.
@@ -57,7 +58,7 @@ func ParseCommand(data []byte) (*Command, error) {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 	switch cmd.Cmd {
-	case CmdVolume, CmdPlayPause, CmdNext, CmdPrev, CmdMute, CmdPower:
+	case CmdVolume, CmdPlayPause, CmdNext, CmdPrev, CmdMute, CmdPower, CmdShazam:
 		return &cmd, nil
 	case "":
 		return nil, fmt.Errorf("missing cmd field")

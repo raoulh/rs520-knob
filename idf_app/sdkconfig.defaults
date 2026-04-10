@@ -35,6 +35,9 @@ CONFIG_ESP_BROWNOUT_DET_LVL=4
 # --- FreeRTOS ---
 CONFIG_FREERTOS_HZ=1000
 
+# Task WDT: don't monitor IDLE1 — taskLVGL pins CPU 1 during heavy renders
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
 # --- Network Identity ---
 CONFIG_LWIP_LOCAL_HOSTNAME="rs520-knob"
 CONFIG_LWIP_NETIF_HOSTNAME=y
@@ -42,6 +45,9 @@ CONFIG_LWIP_NETIF_HOSTNAME=y
 # --- LVGL Configuration ---
 # Color: 16-bit RGB565 (hardware native)
 CONFIG_LV_COLOR_DEPTH_16=y
+
+# Memory: use libc malloc → ESP-IDF heap → PSRAM (avoids static DRAM pool)
+CONFIG_LV_USE_CLIB_MALLOC=y
 
 # Logging
 CONFIG_LV_USE_LOG=y

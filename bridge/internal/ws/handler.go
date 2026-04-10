@@ -170,6 +170,12 @@ func (h *Handler) handleCommand(cmd *Command) {
 			log.Printf("[ws] power error: %v", err)
 			return
 		}
+
+	case CmdShazam:
+		if err := h.rs520.ShazamSearch(); err != nil {
+			log.Printf("[ws] shazam error: %v", err)
+			return
+		}
 	}
 }
 

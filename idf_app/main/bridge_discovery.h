@@ -37,6 +37,18 @@ void bridge_on_state_change(BridgeStateCallback cb, void* ctx);
 /// Non-blocking: stores pending value, coalesces rapid calls.
 void bridge_send_volume(int volume);
 
+/// Send play/pause toggle command to bridge.
+void bridge_send_play_pause();
+
+/// Send next track command to bridge.
+void bridge_send_next();
+
+/// Send previous track command to bridge.
+void bridge_send_prev();
+
+/// Send Shazam search command to bridge.
+void bridge_send_shazam();
+
 /// Get bridge IP address (empty string if not yet discovered).
 const char* bridge_host();
 

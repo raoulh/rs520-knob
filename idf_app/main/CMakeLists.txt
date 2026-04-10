@@ -4,7 +4,7 @@ idf_component_register(
          "wifi_manager.cpp" "wifi_provision.cpp" "wifi_status_ui.cpp"
          "battery.cpp" "battery_ui.cpp" "status_bar.cpp"
          "bridge_discovery.cpp" "connection_ui.cpp"
-         "artwork_ui.cpp" "metadata_ui.cpp"
+         "artwork_ui.cpp" "metadata_ui.cpp" "transport_ui.cpp"
     INCLUDE_DIRS "."
     REQUIRES esp_lcd esp_timer
              lvgl__lvgl espressif__esp_lcd_sh8601 espressif__esp_lvgl_port

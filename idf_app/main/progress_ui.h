@@ -11,13 +11,13 @@ namespace rs520
 /// Must be called inside lvgl_port_lock/unlock.
 void progress_ui_create();
 
-/// Set confirmed volume (solid arc) — animates to position.
-/// Driven by bridge WS events. Hides ghost arc when values match.
+/// Set confirmed volume from bridge. Deferred while encoder is active —
+/// arc animates to the last received value after encoder settles.
 /// Must be called inside lvgl_port_lock/unlock.
 void progress_ui_set_confirmed(int value);
 
-/// Set target volume (ghost arc) — moves instantly, shows popup.
-/// Driven by encoder. Shows volume popup with auto-hide timer.
+/// Hard-snap both confirmed and target to value (no tick, no defer).
+/// For full state sync from bridge.
 /// Must be called inside lvgl_port_lock/unlock.
 /// Returns actual value after clamping.
 int progress_ui_set_target(int value);
@@ -29,15 +29,15 @@ int progress_ui_get_target();
 int progress_ui_get_confirmed();
 
 /// Increment/decrement target by delta. Clamps to [0, 100].
-/// Shows popup. Returns actual value after clamping.
+/// Shows tick on arc + popup. Defers incoming confirmed updates.
+/// Returns actual value after clamping.
 int progress_ui_adjust(int delta);
 
-/// Set progress value (legacy — sets both arcs, no popup).
+/// Snap both values (legacy alias for set_target).
 /// Must be called inside lvgl_port_lock/unlock.
-/// Returns actual value after clamping.
 int progress_ui_set(int value);
 
-/// Get current progress value (legacy — returns target).
+/// Get current target value (legacy alias).
 int progress_ui_get();
 
 }  // namespace rs520

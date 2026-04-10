@@ -265,6 +265,18 @@ static esp_err_t handler_connect(httpd_req_t* req)
     s_connect_ok   = false;
     s_connect_fail = false;
 
+    // Configure STA with new creds and trigger connection (mode is already APSTA)
+    wifi_config_t sta_cfg = {};
+    std::memcpy(sta_cfg.sta.ssid, ssid,
+                std::min(std::strlen(ssid), sizeof(sta_cfg.sta.ssid)));
+    std::memcpy(sta_cfg.sta.password, pass,
+                std::min(std::strlen(pass), sizeof(sta_cfg.sta.password)));
+    sta_cfg.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+    sta_cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+
+    esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
+    esp_wifi_connect();
+
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"connecting\"}");
 
@@ -313,6 +325,16 @@ static void build_ap_ssid()
     }
 }
 
+// Task: waits, then tears down provisioning AP after STA connected
+static void prov_teardown_task(void* /*arg*/)
+{
+    // Give phone time to poll /status and see "connected"
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    ESP_LOGI(kTag, "Tearing down provisioning AP");
+    rs520::provision_stop();
+    vTaskDelete(nullptr);
+}
+
 // WiFi event handler for provisioning — monitors STA connection result
 static void prov_wifi_event_handler(void* /*arg*/, esp_event_base_t event_base,
                                     int32_t event_id, void* /*event_data*/)
@@ -322,6 +344,8 @@ static void prov_wifi_event_handler(void* /*arg*/, esp_event_base_t event_base,
         s_connect_ok   = true;
         s_connecting   = false;
         ESP_LOGI(kTag, "Provisioning: STA connected, stopping AP in 5s...");
+        // Delayed teardown so phone can poll /status success
+        xTaskCreate(prov_teardown_task, "prov_stop", 3072, nullptr, 2, nullptr);
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
@@ -437,8 +461,7 @@ esp_err_t provision_stop()
         s_dns = nullptr;
     }
 
-    // Switch back to STA only
-    esp_wifi_stop();
+    // Switch APSTA → STA only (removes AP without killing STA connection)
     esp_wifi_set_mode(WIFI_MODE_STA);
 
     if (s_ap_netif)
@@ -454,6 +477,11 @@ esp_err_t provision_stop()
 bool provision_active()
 {
     return s_active;
+}
+
+const char* provision_ssid()
+{
+    return s_ap_ssid;
 }
 
 }  // namespace rs520

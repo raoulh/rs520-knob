@@ -40,19 +40,18 @@ constexpr float kChargingVoltage = 4.15f;  // Above this = USB/charging
 struct CurvePoint { float voltage; int percent; };
 constexpr CurvePoint kDischargeCurve[] = {
     {4.20f, 100},
-    {4.15f,  95},
-    {4.10f,  90},
-    {4.05f,  85},
-    {4.00f,  80},
-    {3.95f,  75},
-    {3.90f,  70},
-    {3.85f,  60},
-    {3.80f,  55},
-    {3.75f,  50},
-    {3.70f,  40},
-    {3.65f,  30},
-    {3.60f,  20},
-    {3.00f,   0},
+    {4.15f, 95},
+    {4.10f, 90},
+    {4.00f, 80},
+    {3.90f, 70},
+    {3.80f, 60},
+    {3.75f, 50},
+    {3.70f, 40},
+    {3.65f, 30},
+    {3.60f, 20},
+    {3.50f, 10},
+    {3.30f, 5},
+    {3.00f, 0},
 };
 constexpr int kCurveLen = sizeof(kDischargeCurve) / sizeof(kDischargeCurve[0]);
 

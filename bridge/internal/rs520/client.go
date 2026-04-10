@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -29,6 +32,10 @@ func NewClient(host string) *Client {
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true, // RS520 uses self-signed cert
 				},
+				MaxIdleConns:        5,
+				MaxIdleConnsPerHost: 2,
+				IdleConnTimeout:     30 * time.Second,
+				DisableKeepAlives:   true, // RS520 drops keep-alive unpredictably → fresh conn each time
 			},
 		},
 	}
@@ -44,37 +51,50 @@ func NewClientWithHTTP(baseURL string, httpClient *http.Client) *Client {
 }
 
 func (c *Client) post(path string, body any) ([]byte, error) {
-	var reqBody io.Reader
+	var bodyData []byte
 	if body != nil {
-		data, err := json.Marshal(body)
+		var err error
+		bodyData, err = json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshal request: %w", err)
 		}
-		reqBody = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json;charset=utf-8")
+	// Retry once on EOF — RS520 sometimes resets the TLS connection
+	for attempt := 0; attempt < 2; attempt++ {
+		var reqBody io.Reader
+		if bodyData != nil {
+			reqBody = bytes.NewReader(bodyData)
+		}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request %s: %w", path, err)
-	}
-	defer resp.Body.Close()
+		req, err := http.NewRequest(http.MethodPost, c.baseURL+path, reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json;charset=utf-8")
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			if attempt == 0 && isEOF(err) {
+				log.Printf("[rs520] %s EOF, retrying", path)
+				continue
+			}
+			return nil, fmt.Errorf("request %s: %w", path, err)
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("request %s returned %d: %s", path, resp.StatusCode, string(respBody))
-	}
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("read response: %w", err)
+		}
 
-	return respBody, nil
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("request %s returned %d: %s", path, resp.StatusCode, string(respBody))
+		}
+
+		return respBody, nil
+	}
+	return nil, fmt.Errorf("request %s: unexpected retry fallthrough", path)
 }
 
 func (c *Client) get(path string) ([]byte, error) {
@@ -148,13 +168,16 @@ func (c *Client) GetControlInfo() (*ControlInfoResponse, error) {
 
 // SetVolume sets the RS520 volume (0-100).
 func (c *Client) SetVolume(vol int) (*VolumeResponse, error) {
-	data, err := c.post("/volume", VolumeRequest{Volume: vol})
+	data, err := c.post("/volume", VolumeRequest{VolumeType: "volume_set", VolumeValue: vol})
 	if err != nil {
 		return nil, err
 	}
+	if len(data) == 0 {
+		return &VolumeResponse{VolumeValue: vol}, nil
+	}
 	var resp VolumeResponse
 	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, fmt.Errorf("decode volume: %w", err)
+		return &VolumeResponse{VolumeValue: vol}, nil
 	}
 	return &resp, nil
 }
@@ -221,4 +244,13 @@ func (c *Client) FetchAlbumArt(artID string) ([]byte, string, error) {
 	}
 
 	return data, resp.Header.Get("Content-Type"), nil
+}
+
+// isEOF checks if an error is an EOF, handling Go's HTTP/TLS wrapping.
+func isEOF(err error) bool {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	// Go's TLS layer sometimes wraps EOF in ways errors.Is cannot unwrap
+	return strings.Contains(err.Error(), "EOF")
 }

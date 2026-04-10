@@ -316,9 +316,12 @@ Queue-relative playback state.
 Set the volume.
 ```json
 // Request
-{ "volume": 20 }
+{ "volumeType": "volume_set", "volumeValue": 20 }
+
+// Response (observed)
+{"isUsbEnable":false,"volumeNotSupported":0,"volumeType":"","volumeValue":25,"code":"G0000","status":{"errorCd":"","errorMsg":"","outs":"OK"},"version":"1.0.9"}
 ```
-**Note:** This endpoint returns an **empty body** on success. To read the current volume, use `GET /get_control_info` instead. When the device is in sleep mode, this endpoint also returns an empty body and has no effect.
+**Note:** With the old `{"volume": N}` payload, the endpoint returns an empty body and EOF. The correct payload uses `volumeType` + `volumeValue`. To read the current volume, use `GET /get_control_info`. When the device is in sleep mode, this endpoint returns an empty body and has no effect.
 
 #### `POST /mute.state.get`
 Retrieve mute state.
@@ -856,7 +859,7 @@ curl -k https://192.168.30.135:9283/device_name \
 curl -k https://192.168.30.135:9283/volume \
   -X POST \
   -H "Content-Type: application/json" \
-  -d '{"volume": 25}'
+  -d '{"volumeType": "volume_set", "volumeValue": 25}'
 ```
 
 ### Play/Pause toggle

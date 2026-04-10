@@ -8,11 +8,14 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	_ "image/png"
 	"log"
 	"net/http"
 	"sync"
 
+	_ "golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
 // Proxy fetches, resizes, and caches album artwork.
@@ -46,8 +49,9 @@ func NewProxyWithURL(mediaURL string, httpClient *http.Client) *Proxy {
 // ServeHTTP handles GET /art/current?width=360&height=360&format=rgb565|jpeg
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	artID := r.URL.Query().Get("id")
-	if artID == "" {
-		http.Error(w, "missing id parameter", http.StatusBadRequest)
+	artURL := r.URL.Query().Get("url")
+	if artID == "" && artURL == "" {
+		http.Error(w, "missing id or url parameter", http.StatusBadRequest)
 		return
 	}
 
@@ -63,7 +67,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	width := 360
 	height := 360
 
-	cacheKey := fmt.Sprintf("%s-%s-%dx%d", artID, format, width, height)
+	// Use artID or hash of URL as cache key
+	sourceKey := artID
+	if sourceKey == "" {
+		sourceKey = fmt.Sprintf("url-%x", md5.Sum([]byte(artURL)))
+	}
+	cacheKey := fmt.Sprintf("%s-%s-%dx%d", sourceKey, format, width, height)
 
 	// ETag support
 	etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(cacheKey)))
@@ -78,9 +87,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch from RS520
-	url := p.rs520MediaURL + "/v1/albumarts/" + artID
-	resp, err := p.httpClient.Get(url)
+	// Fetch source image
+	var fetchURL string
+	if artURL != "" {
+		fetchURL = artURL
+	} else {
+		fetchURL = p.rs520MediaURL + "/v1/albumarts/" + artID
+	}
+	resp, err := p.httpClient.Get(fetchURL)
 	if err != nil {
 		log.Printf("[artwork] fetch error: %v", err)
 		http.Error(w, "fetch error", http.StatusBadGateway)
@@ -94,16 +108,29 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Decode
-	src, _, err := image.Decode(resp.Body)
+	src, fmtName, err := image.Decode(resp.Body)
 	if err != nil {
-		log.Printf("[artwork] decode error: %v", err)
+		log.Printf("[artwork] decode error: %v (content-type: %s, url: %s)", err, resp.Header.Get("Content-Type"), fetchURL)
 		http.Error(w, "decode error", http.StatusInternalServerError)
 		return
 	}
+	_ = fmtName
 
-	// Resize
+	// Center-crop to square, then resize
+	srcBounds := src.Bounds()
+	srcW := srcBounds.Dx()
+	srcH := srcBounds.Dy()
+	cropRect := srcBounds
+	if srcW > srcH {
+		offset := (srcW - srcH) / 2
+		cropRect = image.Rect(srcBounds.Min.X+offset, srcBounds.Min.Y, srcBounds.Min.X+offset+srcH, srcBounds.Max.Y)
+	} else if srcH > srcW {
+		offset := (srcH - srcW) / 2
+		cropRect = image.Rect(srcBounds.Min.X, srcBounds.Min.Y+offset, srcBounds.Max.X, srcBounds.Min.Y+offset+srcW)
+	}
+
 	dst := image.NewRGBA(image.Rect(0, 0, width, height))
-	draw.BiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+	draw.BiLinear.Scale(dst, dst.Bounds(), src, cropRect, draw.Over, nil)
 
 	// Encode to requested format
 	var output []byte

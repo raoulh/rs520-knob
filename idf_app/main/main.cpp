@@ -209,10 +209,10 @@ extern "C" void app_main()
     if (wifi_ret == ESP_ERR_NVS_NOT_FOUND || wifi_ret == ESP_FAIL)
     {
         ESP_LOGW(kTag, "No WiFi credentials or connection failed — starting provisioning");
-        lvgl_port_lock(0);
-        rs520::wifi_status_ui_show_provision("RS520-Knob-XXXXXX");
-        lvgl_port_unlock();
         ESP_ERROR_CHECK(rs520::provision_start());
+        lvgl_port_lock(0);
+        rs520::wifi_status_ui_show_provision(rs520::provision_ssid());
+        lvgl_port_unlock();
     }
 
     // Start bridge mDNS discovery + WebSocket client

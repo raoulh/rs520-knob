@@ -9,7 +9,7 @@ namespace
 {
 
 constexpr const char* kTag = "metadata_ui";
-constexpr int kContainerWidth  = 280;
+constexpr int kContainerWidth  = 272;
 constexpr int kLabelMaxWidth   = 260;
 constexpr int kBarWidth        = 260;
 constexpr int kBarHeight       = 4;

@@ -3,6 +3,7 @@ package ws
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 // Command is a message from the knob to the bridge.
@@ -137,4 +138,14 @@ func NewErrorEvent(msg string) *Event {
 		Evt:   EvtError,
 		Title: msg,
 	}
+}
+
+// BuildArtworkPath returns the artwork proxy path for a given key.
+// If the key is a full URL (thumbnail), uses the url= parameter.
+// Otherwise, treats it as a local albumArtId.
+func BuildArtworkPath(key string) string {
+	if len(key) > 4 && key[:4] == "http" {
+		return "/art/current?url=" + url.QueryEscape(key)
+	}
+	return "/art/current?id=" + url.QueryEscape(key)
 }

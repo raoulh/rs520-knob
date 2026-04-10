@@ -27,7 +27,8 @@ const (
 
 // VolumeRequest sets the volume on the RS520.
 type VolumeRequest struct {
-	Volume int `json:"volume"`
+	VolumeType  string `json:"volumeType"`
+	VolumeValue int    `json:"volumeValue"`
 }
 
 // VolumeResponse is returned by POST /volume.
@@ -100,17 +101,18 @@ type CurrentStateData struct {
 	SubAppCurrentData string   `json:"subAppCurrentData"`
 	TempArr           []string `json:"tempArr"`
 	AlbumArtID        string   `json:"albumArtId"`
+	Thumbnail         []string `json:"thumbnail"`
 	ArtistName        string   `json:"artistName"`
 	AlbumName         string   `json:"albumName"`
 	Duration          FlexInt  `json:"duration"`
-	CurrentPosition   FlexInt  `json:"currentPosition"`
+	CurrentPosition   FlexInt  `json:"curPosition"`
 	SourceName        string   `json:"sourceName"`
 	TrackInfo         string   `json:"trackInfo"`
 }
 
 // ControlInfoResponse wraps GET /get_control_info response.
 type ControlInfoResponse struct {
-	Volume       int    `json:"volume"`
+	Volume       int    `json:"volumeValue"`
 	PlayState    int    `json:"playState"`
 	Source       string `json:"source"`
 	Mute         bool   `json:"mute"`

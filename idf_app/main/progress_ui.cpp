@@ -53,6 +53,7 @@ static void show_popup()
     snprintf(buf, sizeof(buf), "%d%%", s_target);
     lv_label_set_text(s_popup_label, buf);
     lv_obj_remove_flag(s_popup_box, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(s_popup_box);
 
     // Reset timer
     if (s_popup_timer)
@@ -111,7 +112,32 @@ void progress_ui_create()
     // Black background
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
 
-    // --- Ghost arc (behind, created first) ---
+    // --- Confirmed arc (created first = lower Z) ---
+    s_arc = lv_arc_create(scr);
+    style_arc_common(s_arc);
+
+    static lv_style_t style_indicator;
+    lv_style_init(&style_indicator);
+    lv_style_set_arc_color(&style_indicator, kColorFg);
+    lv_style_set_arc_width(&style_indicator, kArcWidth);
+    lv_style_set_arc_rounded(&style_indicator, true);
+    lv_obj_add_style(s_arc, &style_indicator, LV_PART_INDICATOR);
+
+    static lv_style_t style_bg;
+    lv_style_init(&style_bg);
+    lv_style_set_arc_color(&style_bg, kColorBg);
+    lv_style_set_arc_width(&style_bg, kArcWidth);
+    lv_style_set_arc_rounded(&style_bg, true);
+    lv_obj_add_style(s_arc, &style_bg, LV_PART_MAIN);
+
+    static lv_style_t style_knob;
+    lv_style_init(&style_knob);
+    lv_style_set_pad_all(&style_knob, 0);
+    lv_style_set_width(&style_knob, 0);
+    lv_style_set_height(&style_knob, 0);
+    lv_obj_add_style(s_arc, &style_knob, LV_PART_KNOB);
+
+    // --- Ghost arc (on top of confirmed = higher Z) ---
     s_ghost_arc = lv_arc_create(scr);
     style_arc_common(s_ghost_arc);
 
@@ -138,31 +164,6 @@ void progress_ui_create()
     lv_obj_add_style(s_ghost_arc, &ghost_knob, LV_PART_KNOB);
 
     lv_obj_add_flag(s_ghost_arc, LV_OBJ_FLAG_HIDDEN);
-
-    // --- Confirmed arc (on top) ---
-    s_arc = lv_arc_create(scr);
-    style_arc_common(s_arc);
-
-    static lv_style_t style_indicator;
-    lv_style_init(&style_indicator);
-    lv_style_set_arc_color(&style_indicator, kColorFg);
-    lv_style_set_arc_width(&style_indicator, kArcWidth);
-    lv_style_set_arc_rounded(&style_indicator, true);
-    lv_obj_add_style(s_arc, &style_indicator, LV_PART_INDICATOR);
-
-    static lv_style_t style_bg;
-    lv_style_init(&style_bg);
-    lv_style_set_arc_color(&style_bg, kColorBg);
-    lv_style_set_arc_width(&style_bg, kArcWidth);
-    lv_style_set_arc_rounded(&style_bg, true);
-    lv_obj_add_style(s_arc, &style_bg, LV_PART_MAIN);
-
-    static lv_style_t style_knob;
-    lv_style_init(&style_knob);
-    lv_style_set_pad_all(&style_knob, 0);
-    lv_style_set_width(&style_knob, 0);
-    lv_style_set_height(&style_knob, 0);
-    lv_obj_add_style(s_arc, &style_knob, LV_PART_KNOB);
 
     // --- Volume popup (centered, hidden) ---
     s_popup_box = lv_obj_create(scr);

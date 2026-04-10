@@ -4,11 +4,16 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/raoulh/rs520-knob/bridge/internal/rs520"
 	"github.com/raoulh/rs520-knob/bridge/internal/state"
+)
+
+const (
+	volumeThrottleInterval = 50 * time.Millisecond
 )
 
 const (
@@ -29,15 +34,21 @@ type Handler struct {
 	rs520     *rs520.Client
 	cache     *state.Cache
 	pollState func() // callback to trigger full state poll
+
+	// Volume throttling — coalesce rapid knob turns into one RS520 request
+	volMu      sync.Mutex
+	volPending int  // -1 = nothing pending
+	volTimer   *time.Timer
 }
 
 // NewHandler creates a WebSocket handler.
 func NewHandler(hub *Hub, rs520Client *rs520.Client, cache *state.Cache, pollState func()) *Handler {
 	return &Handler{
-		hub:       hub,
-		rs520:     rs520Client,
-		cache:     cache,
-		pollState: pollState,
+		hub:        hub,
+		rs520:      rs520Client,
+		cache:      cache,
+		pollState:  pollState,
+		volPending: -1,
 	}
 }
 
@@ -57,6 +68,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	evt := NewStateEvent(s.Volume, s.Mute, s.Playing, s.Title, s.Artist, s.Album, s.Source, s.TrackInfo, s.Position, s.Duration, s.PowerOn)
 	if data, err := json.Marshal(evt); err == nil {
 		client.send <- data
+	}
+
+	// Send current artwork if available
+	if s.AlbumArtID != "" {
+		artEvt := NewArtworkEvent(BuildArtworkPath(s.AlbumArtID))
+		if data, err := json.Marshal(artEvt); err == nil {
+			client.send <- data
+		}
 	}
 
 	// Send connected event
@@ -106,15 +125,7 @@ func (h *Handler) handleCommand(cmd *Command) {
 			log.Printf("[ws] volume error: %v", err)
 			return
 		}
-		resp, err := h.rs520.SetVolume(vol)
-		if err != nil {
-			log.Printf("[ws] set volume error: %v", err)
-			return
-		}
-		changes := h.cache.SetVolume(resp.VolumeValue)
-		if len(changes) > 0 {
-			h.hub.Broadcast(NewVolumeEvent(resp.VolumeValue))
-		}
+		h.throttleVolume(vol)
 
 	case CmdPlayPause:
 		if err := h.rs520.PlayPause(); err != nil {
@@ -159,5 +170,41 @@ func (h *Handler) handleCommand(cmd *Command) {
 			log.Printf("[ws] power error: %v", err)
 			return
 		}
+	}
+}
+
+// throttleVolume coalesces rapid volume changes. Only the latest value
+// is sent to the RS520, at most once per volumeThrottleInterval.
+func (h *Handler) throttleVolume(vol int) {
+	h.volMu.Lock()
+	defer h.volMu.Unlock()
+
+	h.volPending = vol
+
+	if h.volTimer == nil {
+		h.volTimer = time.AfterFunc(volumeThrottleInterval, h.flushVolume)
+	}
+	// Timer already running — pending value will be picked up on fire.
+}
+
+func (h *Handler) flushVolume() {
+	h.volMu.Lock()
+	vol := h.volPending
+	h.volPending = -1
+	h.volTimer = nil
+	h.volMu.Unlock()
+
+	if vol < 0 {
+		return
+	}
+
+	resp, err := h.rs520.SetVolume(vol)
+	if err != nil {
+		log.Printf("[ws] set volume error: %v", err)
+		return
+	}
+	changes := h.cache.SetVolume(resp.VolumeValue)
+	if len(changes) > 0 {
+		h.hub.Broadcast(NewVolumeEvent(resp.VolumeValue))
 	}
 }

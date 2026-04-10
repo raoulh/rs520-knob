@@ -27,8 +27,9 @@ namespace
 {
 
 constexpr const char* kTag = "bridge";
-constexpr const char* kServiceType = "_rs520bridge._tcp";
-constexpr int kDiscoveryTaskStack  = 4096;
+constexpr const char* kServiceType = "_rs520bridge";
+constexpr const char* kServiceProto = "_tcp";
+constexpr int kDiscoveryTaskStack  = 8192;
 constexpr int kDiscoveryTaskPrio   = 4;
 constexpr int kMdnsTimeoutMs       = 5000;
 constexpr int kRetryDelayMs        = 3000;
@@ -63,7 +64,7 @@ static char s_last_etag[64] = {};
 
 // Artwork URL message (fixed-size for queue)
 struct ArtUrlMsg {
-    char path[128];
+    char path[256];
 };
 
 static void set_state(rs520::BridgeState new_state)
@@ -134,38 +135,13 @@ static void artwork_fetch_task(void* /*arg*/)
             continue;
         }
 
-        // Build full URL — ensure format=rgb565
-        char url[256];
-        // Check if url already contains format= param
-        if (strstr(msg.path, "format="))
-        {
-            // Replace format value with rgb565
-            // Simple approach: just build fresh URL with id param
-            const char* id_start = strstr(msg.path, "id=");
-            if (!id_start)
-            {
-                ESP_LOGW(kTag, "art fetch: no id in URL: %s", msg.path);
-                continue;
-            }
-            id_start += 3;  // skip "id="
-            // Extract ID (until & or end)
-            char art_id[96] = {};
-            int i = 0;
-            while (id_start[i] && id_start[i] != '&' && i < (int)sizeof(art_id) - 1)
-            {
-                art_id[i] = id_start[i];
-                i++;
-            }
-            art_id[i] = '\0';
-            snprintf(url, sizeof(url),
-                     "http://%s:%u/art/current?id=%s&format=rgb565",
-                     s_bridge_host, s_bridge_port, art_id);
-        }
-        else
-        {
-            snprintf(url, sizeof(url), "http://%s:%u%s&format=rgb565",
-                     s_bridge_host, s_bridge_port, msg.path);
-        }
+        // Build full URL to bridge artwork proxy, requesting rgb565 format
+        char url[512];
+        // msg.path is like "/art/current?id=xxx" or "/art/current?url=xxx"
+        // Append format=rgb565
+        const char* sep = strchr(msg.path, '?') ? "&" : "?";
+        snprintf(url, sizeof(url), "http://%s:%u%s%sformat=rgb565",
+                 s_bridge_host, s_bridge_port, msg.path, sep);
 
         ESP_LOGI(kTag, "art fetch: %s", url);
 
@@ -492,10 +468,10 @@ static void discovery_task(void* /*arg*/)
         }
 
         set_state(rs520::BridgeState::kSearching);
-        ESP_LOGI(kTag, "searching for %s ...", kServiceType);
+        ESP_LOGI(kTag, "searching for %s.%s ...", kServiceType, kServiceProto);
 
         mdns_result_t* results = nullptr;
-        esp_err_t err = mdns_query_ptr(kServiceType, "_tcp", kMdnsTimeoutMs, 4, &results);
+        esp_err_t err = mdns_query_ptr(kServiceType, kServiceProto, kMdnsTimeoutMs, 4, &results);
 
         if (err != ESP_OK || !results)
         {

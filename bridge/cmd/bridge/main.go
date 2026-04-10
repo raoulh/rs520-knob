@@ -218,6 +218,13 @@ func pollDeviceState(client *rs520.Client, cache *state.Cache, hub *ws.Hub, brid
 		return
 	}
 
+	// Resolve artwork identifier: prefer thumbnail URL, fall back to albumArtId
+	artworkKey := ""
+	if len(currentState.Data.Thumbnail) > 0 && currentState.Data.Thumbnail[0] != "" {
+		artworkKey = currentState.Data.Thumbnail[0]
+	} else if currentState.Data.AlbumArtID != "" {
+		artworkKey = currentState.Data.AlbumArtID
+	}
 	newState := state.State{
 		Volume:     controlInfo.Volume,
 		Mute:       controlInfo.Mute,
@@ -225,7 +232,7 @@ func pollDeviceState(client *rs520.Client, cache *state.Cache, hub *ws.Hub, brid
 		Title:      currentState.Data.TitleName,
 		Artist:     currentState.Data.ArtistName,
 		Album:      currentState.Data.AlbumName,
-		AlbumArtID: currentState.Data.AlbumArtID,
+		AlbumArtID: artworkKey,
 		Source:     controlInfo.Source,
 		PowerOn:    true,
 		Position:   int(currentState.Data.CurrentPosition),
@@ -241,7 +248,8 @@ func pollDeviceState(client *rs520.Client, cache *state.Cache, hub *ws.Hub, brid
 		// Check if artwork changed
 		for _, ch := range changes {
 			if ch.Field == "albumArtId" && s.AlbumArtID != "" {
-				hub.Broadcast(ws.NewArtworkEvent(fmt.Sprintf("/art/current?id=%s&format=jpeg", s.AlbumArtID)))
+				artURL := ws.BuildArtworkPath(s.AlbumArtID)
+				hub.Broadcast(ws.NewArtworkEvent(artURL))
 			}
 		}
 	}

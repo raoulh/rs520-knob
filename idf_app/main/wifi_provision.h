@@ -17,6 +17,9 @@ esp_err_t provision_stop();
 /// True if provisioning is currently active.
 bool provision_active();
 
+/// Get AP SSID used for provisioning (valid after provision_start).
+const char* provision_ssid();
+
 }  // namespace rs520
 
 #endif // RS520_WIFI_PROVISION_H

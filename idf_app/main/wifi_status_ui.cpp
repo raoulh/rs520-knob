@@ -89,12 +89,29 @@ static void update_icon_cb(void* data)
     }
 }
 
+// Hide provisioning overlay (called via lv_async_call on LVGL thread)
+static void hide_provision_cb(void* /*data*/)
+{
+    if (s_prov_container)
+    {
+        lv_obj_del(s_prov_container);
+        s_prov_container  = nullptr;
+        s_prov_ssid_label = nullptr;
+    }
+}
+
 // WiFi state change callback — called from WiFi event task
 static void wifi_state_cb(rs520::WifiState state, void* /*ctx*/)
 {
     s_pending.state = state;
     s_pending.rssi  = rs520::wifi_rssi();
     lv_async_call(update_icon_cb, &s_pending);
+
+    // Auto-hide provisioning overlay when connected
+    if (state == rs520::WifiState::kConnected && s_prov_container)
+    {
+        lv_async_call(hide_provision_cb, nullptr);
+    }
 }
 
 }  // namespace

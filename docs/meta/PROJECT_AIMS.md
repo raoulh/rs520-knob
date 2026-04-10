@@ -60,6 +60,7 @@ Battery-powered WiFi remote control for **HiFi Rose RS520** amplifier. Rotary kn
 3. **Notification receiver** — HTTP server on :9284, receives RS520 push events
 4. **State cache** — polls `/get_current_state` + `/get_control_info`, pushes diffs to knob
 5. **Artwork proxy** — fetches from `:8000/v1/albumarts/{id}`, resizes to 360×360 JPEG, caches
+6. **mDNS advertisement** — advertises `_rs520bridge._tcp` for ESP32 auto-discovery
 6. **mDNS discovery** — finds RS520 via `_http._tcp.local` (`roseHifi-*`)
 
 ### Knob ↔ Bridge Protocol (WebSocket JSON)
@@ -124,10 +125,10 @@ On connect, bridge sends `evt:state` (full snapshot) + `evt:connected` immediate
 - [ ] WiFi auto-connect (NVS-stored credentials)
 - [x] WiFi STA connection with fast BSSID+channel reconnect
 - [x] WiFi SoftAP captive portal provisioning
-- [ ] WebSocket client to Go bridge (connect, reconnect, JSON protocol)
+- [x] WebSocket client to Go bridge (connect, reconnect, JSON protocol)
 - [ ] RS520 control via bridge: volume get/set, transport (play/pause/next/prev), power on/off
 - [ ] Touch buttons: play/pause, next, previous, power
-- [ ] Volume arc/bar visualization on display
+- [x] Volume arc/bar visualization on display
 - [ ] Album art display (bridge-resized JPEG → decode → framebuffer)
 - [ ] Battery level indicator on UI
 - [ ] Deep sleep on idle, wake on encoder/touch

@@ -74,4 +74,10 @@ Capture learnings after each bug, gotcha, or non-obvious discovery.
 **Fix**: Add `espressif/mdns: version: "*"` to `idf_component.yml`
 **Prevention**: Check component availability in managed registry when porting from older IDF versions.
 
+### ESP-IDF v6.0 — cJSON Is an External Managed Component
+**Symptom**: `cJSON.h: No such file or directory` when building with IDF v6.0
+**Root Cause**: cJSON was removed from ESP-IDF core in v6.0 and moved to `espressif/cjson` managed component
+**Fix**: Add `espressif/cjson: "^1.7.18"` to `idf_component.yml` + `espressif__cjson` to `PRIV_REQUIRES` in CMakeLists.txt
+**Prevention**: Never parse JSON manually — always use cJSON. When migrating to IDF v6.0, check all formerly-core components (mDNS, cJSON, etc.) and add as managed dependencies.
+
 <!-- Add new lessons above -->

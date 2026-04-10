@@ -4,7 +4,10 @@ Making the ESP32-S3 knob identifiable on the local network for bridge discovery 
 
 ## Status
 
-**Implemented** in `wifi_manager.cpp`. DHCP hostname is set during `wifi_init()` before `esp_wifi_start()`. mDNS managed component (`espressif/mdns`) added to `idf_component.yml` — initialization pending (mDNS `init()` + `hostname_set()` after IP acquired).
+**Implemented** in `wifi_manager.cpp` + `bridge_discovery.cpp`.
+- DHCP hostname set during `wifi_init()` before `esp_wifi_start()`
+- mDNS initialized in `bridge_discovery_init()` after WiFi connects
+- Bridge auto-discovered via `_rs520bridge._tcp` mDNS browse
 
 ## Problem
 
@@ -74,9 +77,31 @@ auto get_hostname() -> const char* {
 
 ## Bridge Discovery
 
-The Go bridge can be discovered via mDNS or configured statically. The knob needs to find the bridge on the local network:
+**Implemented** in `bridge_discovery.cpp`. The knob auto-discovers the Go bridge via mDNS — no manual configuration needed.
 
-- **mDNS:** bridge advertises a service (e.g., `_rs520bridge._tcp.local`)
+### How It Works
+
+1. `bridge_discovery_init()` spawns a FreeRTOS task (4096 stack, prio 4)
+2. Task calls `mdns_init()` + `mdns_hostname_set("rs520-knob-XXYYZZ")` (MAC-based)
+3. Queries `mdns_query_ptr("_rs520bridge", "_tcp", 5000, ...)` in a loop
+4. On match → extracts IP + port from result → connects WebSocket `ws://host:port/ws`
+5. On disconnect → retries discovery with 3s backoff
+
+### Bridge Side (Go)
+
+The bridge advertises via `hashicorp/mdns`:
+- **Service**: `_rs520bridge._tcp`
+- **TXT records**: `version=0.1.0`, `rs520=<RS520_HOST>`
+- Verify: `avahi-browse -r _rs520bridge._tcp`
+
+### State Machine
+
+`BridgeState` enum: `kDisconnected` → `kSearching` → `kConnecting` → `kConnected`
+
+State changes fire a callback (registered via `bridge_on_state_change()`) which drives the connection UI overlay.
+
+### Fallback Options (Not Yet Implemented)
+
 - **Static:** bridge IP/port stored in NVS
 - **SoftAP provisioning:** user configures bridge address during WiFi setup
 

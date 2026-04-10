@@ -143,12 +143,36 @@ Source: `idf_app/main/encoder.h` / `encoder.cpp`
 - **Consumer**: dedicated task reads queue → updates LVGL progress arc + fires DRV2605 haptic click
 - **Bounds**: progress clamped 0–100%, no haptic at limits
 
-### Integration with Haptic + UI
+### Integration with Haptic + UI + Bridge
 
 ```
 encoder_task loop:
   xQueueReceive(encoder_queue) → EncoderDir
-  if (next value out of [0,100]) → skip
-  lvgl_port_lock → progress_ui_adjust(±1) → lvgl_port_unlock
+  target = progress_ui_get_target()
+  new_target = target ± 1  (clamped 0–100)
+  if (new_target == target) → skip (at limit, no haptic)
+  lvgl_port_lock → progress_ui_set_target(new_target) → lvgl_port_unlock
+  bridge_send_volume(new_target)   // throttled 30ms
   haptic_click()
+```
+
+#### Dual-Arc Volume UI (`progress_ui`)
+
+- **Ghost arc** — lighter color, thinner (14px), shows target instantly on turn
+- **Confirmed arc** — solid accent color, 20px, animates (150ms ease-out) when bridge confirms
+- **Popup label** — centered `"42%"`, rounded rect, semi-transparent black bg, auto-hides after 1.5s
+
+#### Volume Throttle (`bridge_discovery.cpp`)
+
+`bridge_send_volume()` uses a 30ms one-shot `esp_timer` with `std::atomic<int>` pending value.
+Fast knob turns update the atomic; only the last value fires when the timer expires.
+Prevents WebSocket flood while keeping UI responsive (ghost arc updates instantly).
+
+#### Bridge Confirmation Flow
+
+```
+Encoder turn → ghost arc (instant) + popup label
+           → bridge_send_volume() → 30ms throttle → WS send {"cmd":"volume","value":N}
+           → bridge forwards to RS520 → RS520 confirms → bridge pushes {"evt":"volume"}
+           → handle_ws_data() → progress_ui_set_confirmed(N) → solid arc animates
 ```

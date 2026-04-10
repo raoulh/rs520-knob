@@ -13,10 +13,10 @@ Ideas for future work. Move to GitHub Issues when ready to implement.
 
 ## Ideas
 
-### mDNS Bridge Discovery
+### ~~mDNS Bridge Discovery~~ — ✅ DONE
 **Priority**: High
 **Effort**: Small
-**Notes**: `espressif/mdns` managed component is already added. Need to call `mdns_init()` + `mdns_hostname_set()` after IP acquired in `wifi_manager.cpp`. Then browse for `_rs520bridge._tcp.local` to auto-discover bridge IP. Currently bridge address would need to be hardcoded or stored in NVS.
+**Notes**: Implemented in `bridge_discovery.cpp`. ESP32 calls `mdns_query_ptr("_rs520bridge", "_tcp")` to auto-discover bridge. Go bridge advertises via `hashicorp/mdns`. WebSocket client connects automatically. Volume throttle (30ms) + dual-arc UI included.
 
 ### Long-Press Encoder to Reset WiFi Credentials
 **Priority**: Medium
